@@ -58,9 +58,13 @@ public class ModPlugin implements Plugin<Project> {
 			t.setMaxParallelForks(1);
 		});
 
-		// The mods are Pure Faithful's publicly (CLAUDE.md > Decisions): the jar, mod id, licence file and icon path
-		// carry that name; the project folders, packages and tasks keep the project's internal "oldfaithful".
-		String modId = project.getName().replaceFirst("^oldfaithful-", "purefaithful-");
+		// The Pure edition's mods are Pure Faithful's publicly (CLAUDE.md > Decisions): the jar, mod id, licence file and
+		// icon path carry that name; the project folders, packages and tasks keep the project's internal "oldfaithful".
+		// A mod of the Fixed edition only (`oldfaithful_edition=fixed` in its gradle.properties) is Old Faithful's, so
+		// its public name stays oldfaithful-*, with Old Faithful's icon (docs/release.md > Names).
+		boolean fixedEdition = "fixed".equals(project.findProperty("oldfaithful_edition"));
+		String publicName = fixedEdition ? "oldfaithful" : "purefaithful";
+		String modId = project.getName().replaceFirst("^oldfaithful-", publicName + "-");
 
 		// fabric.mod.json gets the version and the public links; every jar carries our licence and the icon.
 		project.getTasks().named(main.getProcessResourcesTaskName(), ProcessResources.class, t -> {
@@ -69,7 +73,7 @@ public class ModPlugin implements Plugin<Project> {
 			t.getInputs().property("tokens", tokens);
 			t.filesMatching("fabric.mod.json", f -> f.expand(tokens));
 			t.from(root.file("LICENSE"), c -> c.rename(n -> "LICENSE_" + modId));
-			t.from(root.file("prism/release/icons/final/purefaithful-128.png"), c -> c.into("assets/" + modId).rename(n -> "icon.png"));
+			t.from(root.file("prism/release/icons/final/" + publicName + "-128.png"), c -> c.into("assets/" + modId).rename(n -> "icon.png"));
 		});
 
 		TaskProvider<Jar> jar = project.getTasks().named(JavaPlugin.JAR_TASK_NAME, Jar.class,

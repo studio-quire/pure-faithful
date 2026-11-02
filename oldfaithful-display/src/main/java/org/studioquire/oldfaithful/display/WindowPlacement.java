@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
+import net.fabricmc.loader.api.FabricLoader;
 import org.studioquire.oldfaithful.lwjgl.Placement;
 import org.studioquire.oldfaithful.lwjgl.Window;
 
@@ -28,7 +29,13 @@ import org.studioquire.oldfaithful.lwjgl.Window;
  * <p>
  * <b>Remembering</b> ({@code window.remember}, off in Pure Faithful, on in Old Faithful): the window's windowed
  * bounds, maximised state and display are kept when the game closes and restored next time, unless the launcher's
- * setting has changed since, in which case the launcher's wins (the last thing changed wins).
+ * setting has changed since, in which case the launcher's wins (the last thing changed wins). Fullscreen (borderless or
+ * exclusive, as {@code fullscreen.exclusive} says now) is kept too, over the windowed placement, on whichever display
+ * the window opens on: its own, or the one it was fitted onto if that's gone.
+ * <p>
+ * <b>Starting maximised</b> ({@code window.startMaximized}, off in Pure Faithful, on in Old Faithful): with neither of
+ * those to say otherwise, the window opens maximised over the game's usual size. With remembering on, that's the
+ * first start; after it, the window is wherever the player left it.
  */
 public final class WindowPlacement {
 	public static final String LAUNCHER_PROPERTY = "org.prismlauncher.window.dimensions";
@@ -37,13 +44,15 @@ public final class WindowPlacement {
 	private static volatile boolean remember;
 	private static volatile File file;
 	private static volatile String launcherRequest;
+	private static volatile boolean startFullscreen;
 
 	private WindowPlacement() {
 	}
 
 	/** Decides the first window's placement (into Settings.placement) before the game starts. */
-	static Placement choose(boolean rememberOn, File stateFile) {
+	static Placement choose(boolean rememberOn, boolean startMaximized, File stateFile) {
 		remember = rememberOn;
+		startFullscreen = false;
 		file = stateFile;
 		launcherRequest = launcherRequest();
 		Placement fromLauncher = fromLauncher(launcherRequest);
@@ -57,13 +66,31 @@ public final class WindowPlacement {
 					log("Launcher's window setting changed since last time (" + describe(state.getProperty("launcher", "")) + " -> "
 							+ describe(launcherRequest) + "): opening as the launcher asks");
 				} else {
-					log("Window opens where it was: " + remembered);
+					startFullscreen = Boolean.parseBoolean(state.getProperty("fullscreen", "false").trim());
+					log("Window opens where it was: " + remembered + (startFullscreen ? ", fullscreen over it" : ""));
 					return remembered;
 				}
 			}
 		}
-		if (fromLauncher != null) log("Window opens as the launcher asks: " + fromLauncher);
-		return fromLauncher;
+		if (fromLauncher != null) {
+			log("Window opens as the launcher asks: " + fromLauncher);
+			return fromLauncher;
+		}
+		if (startMaximized && !sizedByArguments()) {
+			Placement maximized = new Placement();
+			maximized.maximized = true;
+			log("Window opens maximised (window.startMaximized)");
+			return maximized;
+		}
+		return null;
+	}
+
+	/** Another launcher's --width/--height, which reach the game through Fabric's frame: they say what the window is. */
+	private static boolean sizedByArguments() {
+		for (String arg : FabricLoader.getInstance().getLaunchArguments(false)) {
+			if (arg.equals("--width") || arg.equals("--height")) return true;
+		}
+		return false;
 	}
 
 	/** The launcher's request as it was given, or "" if none. */
@@ -94,18 +121,26 @@ public final class WindowPlacement {
 		return null;
 	}
 
+	/**
+	 * Whether the game goes fullscreen as its window opens: it was fullscreen when it last stopped, and the window
+	 * opens where it was (MinecraftMixin). The windowed placement under it is what F11 comes back to.
+	 */
+	public static boolean startFullscreen() {
+		return startFullscreen;
+	}
+
 	/** Keeps where the window is, if remembering; called as the game stops, while the window still exists. */
 	public static void save() {
 		if (!remember || file == null || !Window.created()) return;
 		try {
-			write(Window.placement());
+			write(Window.placement(), Window.fullscreen());
 		} catch (RuntimeException e) {
 			// The game is stopping: nothing here may keep it from closing its window.
 			log("WARN Could not keep the window's placement: " + e);
 		}
 	}
 
-	private static void write(Placement p) {
+	private static void write(Placement p, boolean fullscreen) {
 		if (p == null) return;
 		Properties state = new Properties();
 		state.setProperty("x", String.valueOf(p.x));
@@ -118,6 +153,7 @@ public final class WindowPlacement {
 			state.setProperty("display.x", String.valueOf(p.displayX));
 			state.setProperty("display.y", String.valueOf(p.displayY));
 		}
+		state.setProperty("fullscreen", String.valueOf(fullscreen));
 		state.setProperty("launcher", launcherRequest);
 		File tmp = new File(file.getPath() + ".tmp");
 		try {

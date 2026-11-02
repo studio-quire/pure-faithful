@@ -41,4 +41,7 @@ include 'oldfaithful-lwjgl'
 include 'oldfaithful-display'
 include 'oldfaithful-speed'
 include 'oldfaithful-saves'
+// The Fixed edition's own mods (Old Faithful). Not in Pure Faithful's public snapshot until Old Faithful is released
+// (tools/publish/rules.py), so they're included only where they exist.
+['oldfaithful-fixes', 'oldfaithful-lighting', 'oldfaithful-options'].each { if (file(it).isDirectory()) include it }
 include 'harness'

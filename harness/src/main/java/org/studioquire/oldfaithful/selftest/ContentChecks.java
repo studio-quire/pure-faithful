@@ -58,6 +58,12 @@ final class ContentChecks {
 		boolean refused = throwsOn(() -> ServerContent.checkItem(dye, 16)) && throwsOn(() -> ServerContent.checkItem(dye, -1))
 				&& throwsOn(() -> ServerContent.checkStack(new ItemStack(slab, 1, 4)))
 				&& throwsOn(() -> ServerContent.checkStack(new ItemStack(slab, 1, -3)));
+		// With Old Faithful's fixes (#33), those items name themselves instead of crashing, so there's nothing to refuse.
+		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("oldfaithful-fixes")) {
+			refused = !throwsOn(() -> ServerContent.checkItem(dye, 16)) && !throwsOn(() -> ServerContent.checkItem(dye, -1))
+					&& !throwsOn(() -> ServerContent.checkStack(new ItemStack(slab, 1, 4)))
+					&& !throwsOn(() -> ServerContent.checkStack(new ItemStack(slab, 1, -3)));
+		}
 		// Every item at the damage values vanilla gives it: 0, and through its durability or subtypes.
 		int checked = 0;
 		StringBuilder wrong = new StringBuilder();

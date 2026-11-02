@@ -219,10 +219,21 @@ library. The Java side needed no change.
 - **Remembering the window** (`window.remember`): its windowed bounds, maximised state and display are kept as the game
   stops (`config/purefaithful-display-window.properties`) and restored next launch, following the display by name if
   it moved in the desktop and onto another if it's gone; a launcher setting changed since the window was kept wins
-  (the file holds the launcher's request then), so the last thing changed wins. Fullscreen isn't kept (vanilla's
-  wasn't). **Off in Pure Faithful**, on in Old Faithful (user, 2026-11-02): Pure only undoes our launch's loss of the
+  (the file holds the launcher's request then), so the last thing changed wins. Fullscreen is kept too (the user's ask,
+  2026-11-02; vanilla didn't): a game that stopped fullscreen opens its kept window and goes fullscreen over it as F11
+  would, so the game's flag agrees and one F11 brings that window back (maximised or not). Fullscreen comes as
+  `fullscreen.exclusive` says now, on whichever display the window opened on (its own, or the one it was fitted
+  onto if that's gone); a changed launcher setting opens windowed, as the launcher asks. **Off in Pure Faithful**, on in Old Faithful (user, 2026-11-02): Pure only undoes our launch's loss of the
   launcher's settings; remembering the window is a change from the original, so it belongs to the Fixed edition,
-  which will set it on by default.
+  which sets it on by default (`oldfaithful-options`, below).
+- **Starting maximised** (`window.startMaximized`, 2026-11-02): with neither the launcher's setting (Prism's property,
+  or `--width`/`--height`) nor a remembered placement, the window opens maximised over the game's usual size. Off in
+  Pure Faithful; on in Old Faithful (the user's ask), which with `window.remember` makes it the first start only.
+- **Defaults from other mods**: a mod's fabric.mod.json can ask for defaults, `"custom":
+  {"purefaithful-display:defaults": {"<setting>": "<value>"}}`; they stand in for ours wherever the config file says
+  nothing and are what gets written for a missing setting. Old Faithful's `oldfaithful-options` asks for
+  `window.remember` and `window.startMaximized`, so standalone installs get its window as the pack does
+  (`docs/options.md`).
 - **Title**: b1.7.3 titles its Display "Minecraft Minecraft Beta 1.7.3", which nobody saw: the display sat inside the
   launcher's frame, titled "Minecraft". The window gets the frame's title instead.
 - **Paste** reads the clipboard through our `Sys.getClipboard` (SDL) rather than AWT.
@@ -255,8 +266,13 @@ library. The Java side needed no change.
   injection point is applied and checked (a broken one was checked to fail).
 - `:harness:clientStartupTest`: the real game on this component, started as the SDL dev instance starts it, unseen on
   a private desktop: main menu, title, hidden window, mouse setting, a synthetic Ctrl+V into the server address, a
-  small world created and run for 100 ticks, the game's own clean stop; the window at Prism's size, and two short
-  launches for Prism's maximised and the remembered window's round trip (`docs/building.md`).
+  small world created and run for 100 ticks, the game's own clean stop; the window at Prism's size, and three short
+  launches for Prism's maximised, the remembered window's round trip, and stopping fullscreen then starting in it and
+  F11 back to the kept window (`docs/building.md`). Borderless only, on a hidden window, where SDL holds fullscreen as
+  a pending state: the flags and the kept window are checked, not a window actually covering a display; exclusive
+  isn't run, since a video mode change would reach the user's screen from the private desktop.
+  `./gw :oldfaithful-display:test`: which kept files restore fullscreen (only with their remembered placement; not
+  after a launcher change, nor with remembering off).
 
 ## Not done yet, and doubts
 

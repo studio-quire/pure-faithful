@@ -110,6 +110,32 @@ tasks.register('prismSdlInstance', Zip) {
     archiveFileName = 'OldFaithful-sdl-dev.zip'
 }
 
+// Old Faithful (the Fixed edition) for client checks: the SDL dev instance plus the edition's own mods, under its own
+// name, so it imports beside the others; its display defaults come from oldfaithful-options. Until the edition has
+// a release pack.
+tasks.register('prismFixedInstance', Zip) {
+    group = 'oldfaithful'
+    description = 'Builds local/prism/OldFaithful-fixed-dev.zip: the SDL dev instance with the Fixed edition\'s mods.'
+    def sdl = tasks.named('prismSdlInstance')
+    dependsOn sdl
+    from({ zipTree(sdl.get().archiveFile) }) {
+        filesMatching('instance.cfg') {
+            filter { String line ->
+                line == 'name=Old Faithful (SDL dev)' ? 'name=Old Faithful (fixed dev)' :
+                line == 'iconKey=default' ? 'iconKey=oldfaithful' : line
+            }
+        }
+    }
+    // The edition's icon, the green β seal, named for iconKey as the release pack does.
+    from('prism/release/icons/final/oldfaithful-128.png') { rename { 'oldfaithful.png' } }
+    ['oldfaithful-fixes', 'oldfaithful-lighting', 'oldfaithful-options'].each { name ->
+        if (findProject(":$name") != null) from(project(":$name").tasks.named('remapJar')) { into '.minecraft/mods' }
+    }
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    destinationDirectory = layout.projectDirectory.dir('local/prism')
+    archiveFileName = 'OldFaithful-fixed-dev.zip'
+}
+
 
 // The server package (docs/multiplayer.md): beta 1.7.3's server, which the owner supplies, run through Fabric Loader
 // with our hardening mod; start scripts that check the server jar's hash. Written to local/server-package/, never

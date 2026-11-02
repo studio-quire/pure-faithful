@@ -484,13 +484,13 @@ def beta_green(hue, sat=0.5):
 BETA_GREENS = [("a", 168, "Sea green"), ("b", 155, "Jade"), ("c", 142, "Spring green"), ("d", 128, "Leaf green")]
 
 
-def c07_beta(colors=BETA_PURE, glyph_tint=None):
+def c07_beta(colors=BETA_PURE, glyph_tint=None, shadow=OUT):
     top, bottom, ring = colors
     c = Canvas()
     c.paint(lambda x, y: lerp(top, bottom, y / 32) if disc(16, 16, 15.5)(x, y) else None)
     c.paint(lambda x, y: ring if 14.4 <= math.hypot(x - 16, y - 16) <= 15.5 else None)
     tint = glyph_tint or (ring if colors is not BETA_TEAL else PALE)
-    c.bitmap(BETA, 9 + 1, 6 + 1, lambda x, y, _: OUT)
+    c.bitmap(BETA, 9 + 1, 6 + 1, lambda x, y, _: shadow)
     c.bitmap(BETA, 9, 6, lambda x, y, _: lerp(WHITE, tint, (y - 6) / 20))
     return c
 
@@ -684,6 +684,33 @@ CANDIDATES = [
 ]
 
 
+# The user's note on 07-old-c (2026-11-02): keep the green, but the mint ring and the β's gradient toward it read
+# teal, so the icon feels blue; a silver rim and β instead. Each: (key, name, silver, shadow).
+SILVERS = [("s1", "Neutral silver", (206, 208, 208), OUT),
+           ("s2", "Green-tinged silver", (200, 212, 203), OUT),
+           ("s3", "Neutral silver, green shadow", (206, 208, 208), (14, 44, 30)),
+           ("s4", "Warm silver", (212, 210, 202), OUT)]
+
+
+def silver_seal(silver, shadow):
+    top, bottom, _ = beta_green(142)
+    return c07_beta((top, bottom, silver), glyph_tint=silver, shadow=shadow)
+
+
+def silvers_section():
+    def cells(src):
+        return "".join(f'<div class="cell {bg}"><img src="{src}" width="{n}" height="{n}" alt=""></div>'
+                       for bg, n in (("dark", 32), ("light", 32), ("dark m", 64), ("light m", 64), ("modrinth", 96)))
+    rows = [f'<div class="green ref"><span class="tag">07-old-c &middot; Spring green, as now</span>'
+            f'<div class="row">{cells("07-old-c.png")}</div></div>']
+    for key, name, _, _ in SILVERS:
+        rows.append(f'<div class="green"><span class="tag">07-old-c-{key} &middot; {html.escape(name)}</span>'
+                    f'<div class="row">{cells(f"07-old-c-{key}.png")}</div></div>')
+    return ('<section class="card chosen" id="c07-silver"><h2><span class="num">07</span>Old Faithful: silver rim and β'
+            '</h2><p>The spring green kept; the rim and the β in silver instead of mint, so the seal stops leaning '
+            f'blue.</p>{"".join(rows)}</section>')
+
+
 GREEN_PICK = "b"
 GREEN_WHY = ("Recommended: b, Jade. It reads as green at 32 px on either background, yet stays cool enough to sit "
              "beside Pure's blue as its sibling; c and d drift toward a generic green.")
@@ -732,6 +759,7 @@ def page(entries, has_current):
                         '<p>The geyser in the release now, for comparison.</p>'
                         f'<div class="row">{imgs("00-current.png")}</div></section>')
     cards.insert(0, greens_section())
+    cards.insert(0, silvers_section())
     grid = "".join(f'<figure><img src="{num}-{slug}.png" width="32" height="32" alt=""><figcaption>{num}</figcaption></figure>'
                    for num, slug, *_ in entries)
     return f"""<!DOCTYPE html>
@@ -795,6 +823,8 @@ def main(argv=None):
         entries.append((num, slug, name, idea, old is not None))
     for key, hue, _ in BETA_GREENS:
         c07_beta(beta_green(hue)).image().save(out / f"07-old-{key}.png", optimize=True)
+    for key, _, silver, shadow in SILVERS:
+        silver_seal(silver, shadow).image().save(out / f"07-old-c-{key}.png", optimize=True)
     # The chosen Pure Faithful icon at the release's sizes: Prism's instance icon (128, as purefaithful.png), the
     # mods' icons (128), Modrinth (512; 96 and up), and the native 32.
     final = out / "final"
@@ -803,6 +833,10 @@ def main(argv=None):
     for size in (32, 64, 128, 256, 512):
         pure.resize((size, size), Image.NEAREST).save(final / f"purefaithful-{size}.png", optimize=True)
     pure.resize((128, 128), Image.NEAREST).save(final / "purefaithful.png", optimize=True)
+    # Old Faithful's, in the green the user picked (07-old-c, spring green): its own mods' icons for now.
+    old = c07_beta(beta_green(next(hue for key, hue, _ in BETA_GREENS if key == "c"))).image()
+    for size in (32, 64, 128, 256, 512):
+        old.resize((size, size), Image.NEAREST).save(final / f"oldfaithful-{size}.png", optimize=True)
     current = next((p for p in (ROOT / "prism" / "release" / n for n in ("purefaithful.png", "oldfaithful.png"))
                     if p.exists()), None)
     if current:

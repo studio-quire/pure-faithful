@@ -61,19 +61,31 @@ class ServerSaveTest {
 		}));
 	}
 	private final Path world = run.resolve("world");
+
+	/**
+	 * Block id, meta, block entity id, a field given the wrong type and its value, the block entity expected after
+	 * loading, and the meta expected after loading. The containers come first so their diamonds drop first.
+	 */
+	private static final Object[][] BLOCK_ENTITIES = {
+		{54, 0, "Chest", "Items", 5, "ChestBlockEntity", 0},
+		{61, 5, "Furnace", "Items", 5, "FurnaceBlockEntity", 5},
+		{23, 5, "Trap", "Items", 5, "DispenserBlockEntity", 5},
+		{84, 1, "RecordPlayer", "Record", "13", "JukeboxBlockEntity", 0},
+		{25, 0, "Music", "note", "high", "NoteBlockBlockEntity", 0},
+		{63, 4, "Sign", "Text1", 5, "SignBlockEntity", 4},
+		{52, 0, "MobSpawner", "EntityId", 5, "MobSpawnerBlockEntity", 0},
+		{36, 0, "Piston", "blockId", "stone", "none", 0},
+	};
 	private final List<String> log = new ArrayList<>();
 
 	@Test
 	void damagedChunksAndKilledSaves() throws Exception {
 		fresh();
-		// 1. A world. Started twice: on a new world b1.7.3's server gives the nether its own spawn search and saves its
-		// level.dat last, so the spawn level.dat ends up with (vanilla's own behaviour) can lie away from the area the
-		// first start generated. The second start loads that spawn and generates the area around it.
-		for (int start = 0; start < 2; start++) {
-			try (Server s = new Server()) {
-				s.await(l -> l.contains("Done ("), 300);
-				s.saveAndStop();
-			}
+		// 1. A world. (Before #52's fix it had to be started twice: the unticked Nether's own spawn ended up in
+		// level.dat, away from the area the first start generated.)
+		try (Server s = new Server()) {
+			s.await(l -> l.contains("Done ("), 300);
+			s.saveAndStop();
 		}
 		assertClean(world);
 
@@ -83,21 +95,42 @@ class ServerSaveTest {
 		int[] garbage = {sx + 1, sz}, version = {sx - 1, sz}, chest = {sx, sz + 1}, sky = {sx, sz - 1};
 		byte[] garbageRecord = damagePayload(garbage);
 		byte[] versionSectors = damageVersion(version);
+		// In the chest's chunk, a row of blocks with block entities high in the air, each entity's data unreadable (a
+		// field of the wrong type). Vanilla's chest, furnace, dispenser and jukebox throw when broken without one; the
+		// piston's moving block has no default (vanilla's code expects it may have none).
+		int[][] withEntities = new int[BLOCK_ENTITIES.length][];
 		editChunk(chest, level -> {
-			NbtCompound bad = new NbtCompound();
-			bad.putString("id", "Chest");
-			bad.putInt("x", chest[0] * 16);
-			bad.putInt("y", 1);
-			bad.putInt("z", chest[1] * 16);
-			bad.putInt("Items", 5); // a chest's Items must be a list: reading it throws
-			level.getList("TileEntities").add(bad);
+			byte[] blocks = level.getByteArray("Blocks"), meta = level.getByteArray("Data");
+			for (int k = 0; k < BLOCK_ENTITIES.length; k++) {
+				Object[] b = BLOCK_ENTITIES[k];
+				int lx = 1 + 2 * k, y = 120, lz = 8, i = lx << 11 | lz << 7 | y, m = (Integer) b[1];
+				blocks[i] = (byte) (int) (Integer) b[0];
+				meta[i >> 1] = (byte) ((i & 1) == 0 ? (meta[i >> 1] & 0xF0) | m : (meta[i >> 1] & 0x0F) | m << 4);
+				withEntities[k] = new int[] {chest[0] * 16 + lx, y, chest[1] * 16 + lz};
+				NbtCompound bad = new NbtCompound();
+				bad.putString("id", (String) b[2]);
+				bad.putInt("x", withEntities[k][0]);
+				bad.putInt("y", y);
+				bad.putInt("z", withEntities[k][2]);
+				if (b[4] instanceof Integer) bad.putInt((String) b[3], (Integer) b[4]);
+				else bad.putString((String) b[3], (String) b[4]);
+				level.getList("TileEntities").add(bad);
+			}
 		});
 		editChunk(sky, level -> level.putByteArray("SkyLight", new byte[100]));
+		// And a chest with no block entity in a chunk that's otherwise fine, as Pure Faithful 0.1.0 saved such chests.
+		int[] bare = {sx + 1, sz + 1}, bareChest = {bare[0] * 16 + 4, 120, bare[1] * 16 + 4};
+		editChunk(bare, level -> level.getByteArray("Blocks")[4 << 11 | 4 << 7 | 120] = 54);
 
-		// 3. The server loads them (spawn chunks load at start-up).
+		// 3. The server loads them (spawn chunks load at start-up). The scenario mod then uses and breaks the blocks
+		// whose block entities were unreadable.
+		StringBuilder spec = new StringBuilder();
+		for (int[] b : withEntities) spec.append(b[0]).append(',').append(b[1]).append(',').append(b[2]).append(';');
+		spec.append(bareChest[0]).append(',').append(bareChest[1]).append(',').append(bareChest[2]);
 		List<String> lines;
-		try (Server s = new Server()) {
+		try (Server s = new Server(spec.toString())) {
 			s.await(l -> l.contains("Done ("), 300);
+			s.await(l -> l.contains("[saves-scenario] done"), 60);
 			s.saveAndStop();
 			lines = s.lines();
 		}
@@ -106,6 +139,25 @@ class ServerSaveTest {
 		assertTrue(has(lines, "The chunk at blocks " + chest[0] * 16 + ", " + chest[1] * 16 + " had damaged parts (a block entity (Chest)"),
 				"the unreadable chest left out, the chunk kept");
 		assertTrue(has(lines, "The chunk at blocks " + sky[0] * 16 + ", " + sky[1] * 16 + " had damaged parts (sky light"), "sky light rebuilt");
+		// Each block got a fresh block entity of its own (none for the moving piston), its facing or rotation kept, the
+		// jukebox emptied (meta 0, so a record goes in), and each broke cleanly, dropping what had been put in it.
+		for (int k = 0; k < BLOCK_ENTITIES.length; k++) {
+			int[] b = withEntities[k];
+			Object[] e = BLOCK_ENTITIES[k];
+			String expected = "[saves-scenario] at " + b[0] + " " + b[1] + " " + b[2] + ": block " + e[0] + " meta " + e[6] + " entity " + e[5];
+			assertTrue(has(lines, expected), "expected: " + expected);
+		}
+		assertTrue(has(lines, "[saves-scenario] at " + bareChest[0] + " " + bareChest[1] + " " + bareChest[2] + ": block 54 meta 0 entity ChestBlockEntity"),
+				"the chest saved without a block entity got one");
+		int diamond = 256 + 8, record13 = 256 + 2000;
+		assertTrue(has(lines, "[saves-scenario] broke " + (BLOCK_ENTITIES.length + 1) + " blocks; dropped " + List.of(diamond, diamond, diamond, record13, diamond)),
+				"the blocks broke, and what was in them dropped");
+		assertTrue(has(lines, "The chunk at blocks " + chest[0] * 16 + ", " + chest[1] * 16 + " had damaged parts (a block entity (Chest)"
+				+ " (unreadable: ClassCastException; left out); "), "the unreadable chest reported");
+		assertTrue(has(lines, "; put in their place: an empty chest at "), "the fresh block entities reported");
+		assertTrue(has(lines, "The chunk at blocks " + bare[0] * 16 + ", " + bare[1] * 16 + " had damaged parts (put in their place: an empty chest at "
+				+ bareChest[0] + ", " + bareChest[1] + ", " + bareChest[2] + ")"), "the bare chest reported");
+		assertCopyExists(world, bare);
 		assertCopy(world, garbage, garbageRecord);
 		assertCopy(world, version, versionSectors);
 		// Partly damaged chunks load without the damaged part, the record as found is kept, and the repaired chunk is
@@ -168,6 +220,58 @@ class ServerSaveTest {
 		}
 		// Passed: this run's world goes (a failed run's stays for a look, and is cleared after two hours).
 		delete(run);
+	}
+
+	/**
+	 * docs/bugs.md #52: with allow-nether=false the server's unticked Nether used to write level.dat last, so every stop
+	 * put back the time and weather the session began with, and on a new world the Nether's own spawn (0, 64, 0 for
+	 * this seed; the overworld's is far from it). While the server runs only the overworld autosaves level.dat, so
+	 * what it holds then is the overworld's: after each stop, the time must not have gone back and the spawn must be
+	 * the same.
+	 */
+	@Test
+	void levelDatSurvivesWithoutTheNether() throws Exception {
+		fresh("level-seed=52");
+		long lastTime = -1;
+		int[] spawn = null;
+		for (int start = 0; start < 2; start++) {
+			try (Server s = new Server()) {
+				s.await(l -> l.contains("Done ("), 300);
+				assertTrue(has(s.lines(), "allow-nether=false: level.dat is saved from the overworld alone"), "the unticked Nether wasn't noticed");
+				long from = lastTime;
+				NbtCompound running = awaitLevel(d -> d.getLong("Time") >= from + 100, 60);
+				int[] now = {running.getInt("SpawnX"), running.getInt("SpawnY"), running.getInt("SpawnZ")};
+				if (spawn == null) spawn = now;
+				assertArrayEquals(spawn, now, "the spawn moved between starts");
+				s.saveAndStop();
+				NbtCompound stopped = levelData(world);
+				System.out.println("[ServerSaveTest] start " + (start + 1) + ": running Time " + running.getLong("Time") + ", after stop Time "
+						+ stopped.getLong("Time") + ", spawn " + stopped.getInt("SpawnX") + ", " + stopped.getInt("SpawnY") + ", " + stopped.getInt("SpawnZ"));
+				assertTrue(stopped.getLong("Time") >= running.getLong("Time"), "the time went back on stopping: " + running.getLong("Time") + " to " + stopped.getLong("Time"));
+				assertArrayEquals(spawn, new int[] {stopped.getInt("SpawnX"), stopped.getInt("SpawnY"), stopped.getInt("SpawnZ")}, "the spawn changed on stopping");
+				assertTrue(stopped.getInt("rainTime") > 0, "the weather's countdown was reset on stopping");
+				lastTime = stopped.getLong("Time");
+			}
+		}
+		// The Nether's own spawn for this seed, which vanilla left in level.dat.
+		assertTrue(spawn[0] != 0 || spawn[2] != 0, "this seed's overworld spawn should lie away from the Nether's 0, 0");
+		delete(run);
+	}
+
+	/** level.dat as soon as it satisfies {@code p}, read while the server may be replacing it. */
+	private NbtCompound awaitLevel(Predicate<NbtCompound> p, int seconds) throws InterruptedException {
+		long deadline = System.currentTimeMillis() + seconds * 1000L;
+		NbtCompound last = null;
+		while (System.currentTimeMillis() < deadline) {
+			try {
+				last = levelData(world);
+				if (p.test(last)) return last;
+			} catch (IOException e) {
+				// Between renames; read again.
+			}
+			Thread.sleep(200);
+		}
+		throw new AssertionError("level.dat never got there; last read: Time " + (last == null ? "none" : last.getLong("Time")));
 	}
 
 	// --- the world ---------------------------------------------------------------------------------------------------
@@ -314,7 +418,8 @@ class ServerSaveTest {
 
 	// --- the server --------------------------------------------------------------------------------------------------
 
-	private void fresh() throws IOException {
+	/** {@code extra}: more server.properties lines. */
+	private void fresh(String... extra) throws IOException {
 		if (!base.toString().replace('\\', '/').contains("/local/run/")) throw new AssertionError("unexpected run dir " + base);
 		Files.createDirectories(base);
 		// Old runs' folders (failed ones are kept for a look); never one that might still be running.
@@ -331,14 +436,19 @@ class ServerSaveTest {
 			}
 		}
 		Files.createDirectories(run.resolve("mods"));
-		Path mod = Path.of(System.getProperty("oldfaithful.saves.mod"));
-		Files.copy(mod, run.resolve("mods").resolve(mod.getFileName()));
+		for (String property : new String[] {"oldfaithful.saves.mod", "oldfaithful.saves.scenario.mod"}) {
+			Path mod = Path.of(System.getProperty(property));
+			Files.copy(mod, run.resolve("mods").resolve(mod.getFileName()));
+		}
 		int port;
 		try (ServerSocket s = new ServerSocket(0)) {
 			port = s.getLocalPort();
 		}
-		Files.writeString(run.resolve("server.properties"), String.join("\n", "level-name=world", "online-mode=false",
-				"server-ip=127.0.0.1", "server-port=" + port, "view-distance=4", "allow-nether=false", "spawn-animals=true", ""));
+		List<String> properties = new ArrayList<>(List.of("level-name=world", "online-mode=false", "server-ip=127.0.0.1", "server-port=" + port,
+				"view-distance=4", "allow-nether=false", "spawn-animals=true"));
+		properties.addAll(List.of(extra));
+		properties.add("");
+		Files.writeString(run.resolve("server.properties"), String.join("\n", properties));
 	}
 
 	private static void delete(Path dir) throws IOException {
@@ -353,8 +463,13 @@ class ServerSaveTest {
 		private final OutputStream stdin;
 
 		Server() throws IOException {
+			this("");
+		}
+
+		/** {@code scenario}: blocks for the scenario mod to use and break (x,y,z;...), or empty for none. */
+		Server(String scenario) throws IOException {
 			String java = ProcessHandle.current().info().command().orElse("java");
-			process = new ProcessBuilder(java, "-Xmx768m", "-cp", System.getProperty("oldfaithful.server.classpath"),
+			process = new ProcessBuilder(java, "-Xmx768m", "-Doldfaithful.saves.scenario=" + scenario, "-cp", System.getProperty("oldfaithful.server.classpath"),
 					"net.fabricmc.loader.impl.launch.knot.KnotServer", "nogui").directory(run.toFile()).redirectErrorStream(true).start();
 			live.add(process);
 			process.onExit().thenRun(() -> live.remove(process));
@@ -370,7 +485,7 @@ class ServerSaveTest {
 						synchronized (log) {
 							log.add(line);
 						}
-						if (line.contains("[purefaithful-saves]")) System.out.println("  server: " + line);
+						if (line.contains("[purefaithful-saves]") || line.contains("[saves-scenario]")) System.out.println("  server: " + line);
 					}
 				} catch (IOException ignored) {
 					// The process went away.

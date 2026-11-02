@@ -7,9 +7,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.CustomValue;
 import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 
 import org.studioquire.oldfaithful.lwjgl.Settings;
@@ -43,6 +49,9 @@ public final class DisplayConfig implements PreLaunchEntrypoint {
 					"# The window opens where it was when the game last closed: its size, position, display, and maximised or\n"
 					+ "# not. Changing the launcher's window settings (Prism's Window size, Start Minecraft maximized) wins over\n"
 					+ "# it the next time. false: the window opens as the launcher asks, as the original game did.\n"},
+			{"window.startMaximized", "false",
+					"# The window opens maximised when neither the launcher nor a remembered placement (window.remember) says\n"
+					+ "# otherwise. false: at the game's own size, as the original game did.\n"},
 			{"vsync", "true",
 					"# Frames wait for the screen's refresh: no tearing, even pacing. The original game ran without it\n"
 					+ "# (false), drawing as fast as it could, which tears and judders on today's displays.\n"},
@@ -51,7 +60,8 @@ public final class DisplayConfig implements PreLaunchEntrypoint {
 	@Override
 	public void onPreLaunch() {
 		if (!DisplayMixinPlugin.layerPresent()) return;
-		Properties p = new Properties();
+		Properties defaults = modDefaults();
+		Properties p = new Properties(defaults);
 		File file = FabricLoader.getInstance().getConfigDir().resolve("purefaithful-display.properties").toFile();
 		try {
 			StringBuilder add = new StringBuilder();
@@ -64,7 +74,7 @@ public final class DisplayConfig implements PreLaunchEntrypoint {
 				add.append(HEADER);
 			}
 			for (String[] s : SETTINGS) {
-				if (!p.containsKey(s[0])) add.append('\n').append(s[2]).append(s[0]).append('=').append(s[1]).append('\n');
+				if (!p.containsKey(s[0])) add.append('\n').append(s[2]).append(s[0]).append('=').append(defaults.getProperty(s[0], s[1])).append('\n');
 			}
 			if (add.length() > 0) {
 				try (OutputStream out = new FileOutputStream(file, true)) {
@@ -81,6 +91,7 @@ public final class DisplayConfig implements PreLaunchEntrypoint {
 		subpixelLook = Boolean.parseBoolean(value(p, "mouse.subpixel"));
 		FrameClock.enabled = Boolean.parseBoolean(value(p, "frame.smooth"));
 		Settings.placement = WindowPlacement.choose(Boolean.parseBoolean(value(p, "window.remember")),
+				Boolean.parseBoolean(value(p, "window.startMaximized")),
 				FabricLoader.getInstance().getConfigDir().resolve("purefaithful-display-window.properties").toFile());
 	}
 
@@ -92,5 +103,40 @@ public final class DisplayConfig implements PreLaunchEntrypoint {
 			if (s[0].equals(key)) return p.getProperty(key, s[1]).trim();
 		}
 		throw new IllegalArgumentException(key);
+	}
+
+	/**
+	 * Defaults other mods ask for in their fabric.mod.json, {@code "custom": {"purefaithful-display:defaults":
+	 * {"window.remember": "true"}}} (Old Faithful's options mod does, for its edition's window). They stand in for
+	 * ours wherever the file says nothing, and are what's written for a setting the file lacks; what the file says
+	 * wins. Two mods asking for different values: the first by mod id wins, and the clash is logged.
+	 */
+	private static Properties modDefaults() {
+		Properties d = new Properties();
+		List<ModContainer> mods = new ArrayList<>(FabricLoader.getInstance().getAllMods());
+		mods.sort(Comparator.comparing(m -> m.getMetadata().getId()));
+		for (ModContainer mod : mods) {
+			String id = mod.getMetadata().getId();
+			CustomValue asked = mod.getMetadata().getCustomValue("purefaithful-display:defaults");
+			if (asked == null || asked.getType() != CustomValue.CvType.OBJECT) continue;
+			for (Map.Entry<String, CustomValue> e : asked.getAsObject()) {
+				String key = e.getKey();
+				boolean known = false;
+				for (String[] s : SETTINGS) known |= s[0].equals(key);
+				if (!known || e.getValue().getType() != CustomValue.CvType.STRING) {
+					System.out.println("[purefaithful-display] WARN " + id + " asks for a default of a setting this version lacks, or not as text: " + key);
+					continue;
+				}
+				String value = e.getValue().getAsString();
+				if (!d.containsKey(key)) {
+					d.setProperty(key, value);
+					System.out.println("[purefaithful-display] Default " + key + "=" + value + ", asked by " + id);
+				} else if (!d.getProperty(key).equals(value)) {
+					System.out.println("[purefaithful-display] Default " + key + " asked as " + d.getProperty(key) + " and as " + value
+							+ " (" + id + "): keeping the first");
+				}
+			}
+		}
+		return d;
 	}
 }

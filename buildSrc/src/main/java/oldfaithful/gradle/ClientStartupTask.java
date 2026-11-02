@@ -29,10 +29,11 @@ import org.gradle.api.tasks.TaskAction;
  * does; its own window is created hidden besides; sound goes to a file (OpenAL Soft's wave writer).
  * <p>
  * The launch passes a Prism window size ({@code org.prismlauncher.window.dimensions}, as Prism does), and the
- * window must open at it. Then, on Windows, two short launches in a game folder of their own, with the display
+ * window must open at it. Then, on Windows, three short launches in a game folder of their own, with the display
  * mod's {@code window.remember} on: the first with Prism asking for maximised and a kept placement from when Prism
  * asked otherwise (Prism's change wins: maximised), which the self-test then resizes, moves and maximises; the second
- * must open exactly there. The kept placement is read back after each.
+ * must open exactly there, then goes fullscreen (borderless: no video mode changes) and stops so; the third must
+ * open fullscreen over that same window, which one F11 brings back. The kept placement is read back after each.
  * <p>
  * With {@code platform} set to {@code linux-<image>}, the same run happens on Linux x64 instead: in a Docker
  * container with an X server nobody sees (tools/in_linux.py, harness/linux/Dockerfile.<image>), from any host.
@@ -64,18 +65,28 @@ public abstract class ClientStartupTask extends GameTestTask {
 	public abstract Property<Integer> getTimeoutSeconds();
 
 	/**
-	 * The two short launches that check the window's placement beyond the launcher's size (maximised, and kept
+	 * The short launches that check the window's placement beyond the launcher's size (maximised, and kept
 	 * between launches with {@code window.remember}). On by default on Windows only: positions under the Linux test
 	 * images' X server, which has no window manager, say little.
 	 */
 	@Input
 	public abstract Property<Boolean> getWindowRuns();
 
+	/**
+	 * Old Faithful's mods are among the mods (oldfaithful-options asks the display mod to remember the window and
+	 * start maximised): the main launch must keep its placement, and with the window runs comes a first start, in a
+	 * game folder with no options.txt or config, that must open maximised with the GUI at Normal and stop by its
+	 * title screen's Quit Game.
+	 */
+	@Input
+	public abstract Property<Boolean> getOldFaithful();
+
 	public ClientStartupTask() {
 		getPython().convention("python");
 		getTimeoutSeconds().convention(180);
 		getPlatform().convention("windows");
 		getWindowRuns().convention(getPlatform().map(p -> p.equals("windows")));
+		getOldFaithful().convention(false);
 	}
 
 	private static final String PRISM_WINDOW = "-Dorg.prismlauncher.window.dimensions=";
@@ -96,7 +107,11 @@ public abstract class ClientStartupTask extends GameTestTask {
 				"-Doldfaithful.selftest.expectSize=1000x600", "-Doldfaithful.selftest.expectMaximized=false"), failures);
 		if (lines.stream().noneMatch(l -> l.contains("OpenAL initialized"))) failures.add("the sound system didn't start (no \"OpenAL initialized\")");
 		if (!Files.isRegularFile(run.resolve("saves/oldfaithful-startup/level.dat"))) failures.add("the test world wasn't saved");
-		if (Files.exists(run.resolve(KEPT_PLACEMENT))) failures.add("the window's placement was kept with window.remember off (the default)");
+		boolean oldFaithful = getOldFaithful().get();
+		if (oldFaithful != Files.exists(run.resolve(KEPT_PLACEMENT))) {
+			failures.add(oldFaithful ? "the window's placement wasn't kept, with Old Faithful's window.remember default"
+					: "the window's placement was kept with window.remember off (the default)");
+		}
 		Path log = run.resolve("logs/purefaithful/latest.log");
 		if (!Files.isRegularFile(log)) failures.add("no log file at " + log);
 		else if (!Files.readString(log, StandardCharsets.UTF_8).contains("[oldfaithful-selftest] PASS main menu reached")) {
@@ -119,20 +134,61 @@ public abstract class ClientStartupTask extends GameTestTask {
 			first.addAll(List.of("-Doldfaithful.selftest.expectMaximized=true", "-Doldfaithful.selftest.rearrange=950x550@100,120"));
 			lines.add("--- window run 1: Prism asks for maximised; kept from when it asked for 1000x600");
 			lines.addAll(launch(game, linux, first, failures));
-			checkKept(game, "after window run 1", failures);
+			checkKept(game, "after window run 1", false, failures);
 
 			List<String> second = new ArrayList<>(menuOnly);
-			second.addAll(List.of("-Doldfaithful.selftest.expectSize=950x550", "-Doldfaithful.selftest.expectAt=100,120",
-					"-Doldfaithful.selftest.expectMaximized=true"));
-			lines.add("--- window run 2: Prism unchanged; opens where it was");
+			List<String> where = List.of("-Doldfaithful.selftest.expectSize=950x550", "-Doldfaithful.selftest.expectAt=100,120",
+					"-Doldfaithful.selftest.expectMaximized=true");
+			second.addAll(where);
+			second.add("-Doldfaithful.selftest.fullscreenAtStop=true");
+			lines.add("--- window run 2: Prism unchanged; opens where it was, then goes fullscreen (borderless) and stops so");
 			lines.addAll(launch(game, linux, second, failures));
-			checkKept(game, "after window run 2", failures);
+			checkKept(game, "after window run 2", true, failures);
+
+			List<String> third = new ArrayList<>(menuOnly);
+			third.addAll(where);
+			third.addAll(List.of("-Doldfaithful.selftest.expectFullscreen=true", "-Doldfaithful.selftest.leaveFullscreen=true"));
+			lines.add("--- window run 3: opens fullscreen over the kept window; F11 brings that window back");
+			lines.addAll(launch(game, linux, third, failures));
+			checkKept(game, "after window run 3", false, failures);
+
+			if (oldFaithful) {
+				Path fresh = run.resolve("first-start");
+				Files.createDirectories(fresh.resolve("mods"));
+				try (Stream<Path> mods = Files.list(run.resolve("mods"))) {
+					for (Path mod : mods.toList()) Files.copy(mod, fresh.resolve("mods").resolve(mod.getFileName()));
+				}
+				prepare(fresh, linux);
+				Files.delete(fresh.resolve("options.txt"));
+				lines.add("--- first start: no options.txt, no config, no launcher window setting");
+				lines.addAll(launch(fresh, linux, List.of("-Doldfaithful.selftest.menuOnly=true", "-Doldfaithful.selftest.firstStart=true",
+						"-Doldfaithful.selftest.expectMaximized=true"), failures));
+				java.util.Properties display = new java.util.Properties();
+				Path displayConfig = fresh.resolve("config/purefaithful-display.properties");
+				if (Files.isRegularFile(displayConfig)) {
+					try (java.io.Reader r = Files.newBufferedReader(displayConfig, StandardCharsets.ISO_8859_1)) {
+						display.load(r);
+					}
+				}
+				for (String key : List.of("window.remember", "window.startMaximized")) {
+					if (!"true".equals(display.getProperty(key))) {
+						failures.add("first start: " + displayConfig.getFileName() + " has " + key + "=" + display.getProperty(key) + ", not Old Faithful's true");
+					}
+				}
+				java.util.Properties kept = new java.util.Properties();
+				if (Files.isRegularFile(fresh.resolve(KEPT_PLACEMENT))) {
+					try (java.io.Reader r = Files.newBufferedReader(fresh.resolve(KEPT_PLACEMENT), StandardCharsets.ISO_8859_1)) {
+						kept.load(r);
+					}
+				}
+				if (!"true".equals(kept.getProperty("maximized"))) failures.add("first start: the kept placement isn't maximised (" + kept + ")");
+			}
 		}
 		report(linux ? "Client start-up test (" + platform + ")" : "Client start-up test", lines, failures);
 	}
 
-	/** What both window runs leave kept: where the first one put the window, and Prism's request then. */
-	private static void checkKept(Path game, String when, List<String> failures) throws IOException {
+	/** What the window runs leave kept: where the first one put the window, Prism's request then, and fullscreen or not. */
+	private static void checkKept(Path game, String when, boolean fullscreen, List<String> failures) throws IOException {
 		Path file = game.resolve(KEPT_PLACEMENT);
 		if (!Files.isRegularFile(file)) {
 			failures.add(when + ": no kept placement at " + file);
@@ -142,7 +198,8 @@ public abstract class ClientStartupTask extends GameTestTask {
 		try (java.io.Reader r = Files.newBufferedReader(file, StandardCharsets.ISO_8859_1)) {
 			kept.load(r);
 		}
-		Map<String, String> want = Map.of("x", "100", "y", "120", "width", "950", "height", "550", "maximized", "true", "launcher", "maximized");
+		Map<String, String> want = Map.of("x", "100", "y", "120", "width", "950", "height", "550", "maximized", "true", "launcher", "maximized",
+				"fullscreen", String.valueOf(fullscreen));
 		for (Map.Entry<String, String> e : want.entrySet()) {
 			if (!e.getValue().equals(kept.getProperty(e.getKey()))) {
 				failures.add(when + ": kept " + e.getKey() + "=" + kept.getProperty(e.getKey()) + ", expected " + e.getValue());

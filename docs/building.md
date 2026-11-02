@@ -20,12 +20,16 @@ done; the CPU is shared.
 | `./gw prismDevInstance` | `local/prism/OldFaithful-dev.zip`, a Prism instance to import for client checks (below). |
 | `./gw :harness:linkCheck` | Every `org.lwjgl` reference in b1.7.3, our mods, the popular mods pinned in `harness/linkcheck-mods.json` and our LWJGL jar's own classes resolves against our LWJGL component (`docs/lwjgl.md`). Report: `harness/build/reports/linkcheck.txt`. Seconds; the first run fetches the mods (hash-checked) into `local/cache/linkcheck-mods`. |
 | `./gw :oldfaithful-speed:test` | `ChunkMap` against HashMap through 400,000 random operations on chunk-shaped keys. Seconds. The speed mod itself joins `clientAudit`, `clientAuditSdl` and the start-up tests; the benchmark's `speed` configuration measures it (`docs/speed.md`). |
+| `./gw :oldfaithful-fixes:test`, `./gw :harness:clientStartupTestFixed`, `./gw :oldfaithful-fixes:serverTicksTest` | The Fixed edition's fix mod: its unit test, the start-up test with it, then its fixes set up and checked in the running world, and the real server keeping a repeater clock running across a restart (#42) (`docs/fixes.md`). Seconds; about 25 s; about 45 s. The mod also joins `serverTest` and the client audits. |
+| `./gw :oldfaithful-lighting:serverLightTest`, `:oldfaithful-lighting:lightCheck -Pworld=<folder>` | Old Faithful's lighting (`docs/lighting.md`): the real server with and without the mod through a scenario (and once at a single player client's lighting pace, checked before the queue is done), every saved chunk's light against b1.7.3's rule computed from scratch; the checker alone on any world. About 2 minutes. The mod also joins `serverTest`, the client audits and `clientStartupTestFixed`. |
+| `./gw :oldfaithful-options:test` | Old Faithful's options mod (`docs/options.md`): its unit test. It joins the client audits and `clientStartupTestFixed`, which with it checks Quit Game, the FOV in the world, and adds a first start (maximised, GUI Normal, stopped by Quit Game). |
 | `./gw :harness:lwjglTest` | Our LWJGL component at run time with no visible window: changed classes load and verify; Display, GL and a shared context on a hidden SDL window; keyboard and mouse against synthetic SDL events; the game's paulscode playing through our AL into OpenAL Soft's wave writer. About 20 s. Takes `-Poldfaithful.gameJava` (passes on 21 and 25). |
 | `./gw :harness:clientAuditSdl` | The client audit on our LWJGL component with `oldfaithful-display`, whose mixins apply only there. |
 | `./gw :harness:clientStartupTest` | The real client on our LWJGL component, unseen, as the SDL instance starts it: main menu, a paste, a small world created and run, a clean stop (below). About 10 s; Windows; needs `python`. |
 | `./gw :harness:lwjglTestLinux`, `:harness:clientStartupTestLinux` | The same two tests on Linux x64, in Docker on AlmaLinux 8 and Ubuntu 24.04 (Xvfb, Mesa's llvmpipe), through `tools/in_linux.py`; any host with Docker, nothing shown. Per image: `lwjglTestLinux-alma8-display`, `clientStartupTestLinux-ubuntu2404` and so on (below). |
 | `./gw :harness:benchSetup`, `python tools/bench.py` | The speed benchmark: the real game unseen on a fixed script, per-frame timings, reports (`docs/speed.md`). |
 | `./gw prismSdlInstance` | `local/prism/OldFaithful-sdl-dev.zip`: the dev instance on our LWJGL component (below). |
+| `./gw prismFixedInstance` | `local/prism/OldFaithful-fixed-dev.zip`: the SDL dev instance with Old Faithful's own mods (whose `oldfaithful-options` brings its display defaults), for client checks of the Fixed edition. |
 | `./gw :harness:multiplayerTest` | Phase 6 (`docs/multiplayer.md`): the server package started by its own `start.bat`, offline mode, against raw-packet clients, honest and malicious. The server must refuse the malicious ones, keep answering `list`, keep its world whole, and never run out of memory. About a minute. |
 | `./gw serverPackage`, `serverPackageZip` | `local/server-package/OldFaithful-server/` (and `.zip`): start scripts that check the server jar's hash, Fabric Loader and its libraries, the hardening mod; the owner adds `minecraft_server.jar` (`docs/multiplayer.md`). |
 | `./gw release`, `python tools/publish.py --check` | A release in `local/release/<version>/` (the pack, the mods, the LWJGL component file, the server package, sources, SHA256SUMS), and the public snapshot built and checked; nothing published (`docs/release.md`). Seconds. |
@@ -124,10 +128,11 @@ is titled "Minecraft", exists and was never shown or active; the mouse is on the
 Ctrl+V into Multiplayer's address field pastes what SDL reads from the clipboard (read, never written or printed);
 then a new world (`saves/oldfaithful-startup`) is created as the Create World screen does, runs 100 ticks, and the
 game stops itself as its close button would. The launch carries a Prism window size (1000x600, in Prism's system
-property) and the window and the game must be that size. Two short launches follow in `window-memory/` with the display
+property) and the window and the game must be that size. Three short launches follow in `window-memory/` with the display
 mod's `window.remember` on, to the main menu only: Prism asking for maximised over a placement kept from when it asked
 otherwise (Prism's change wins), which the self-test then resizes, moves and maximises; then one that must open exactly
-there; the kept file is read back after each (`docs/lwjgl.md` > The display mod). The task fails on a failed or missing check, any error-like line in the
+there and then stop in (borderless) fullscreen; then one that must open fullscreen over that window and come back to it
+on F11; the kept file is read back after each (`docs/lwjgl.md` > The display mod). The task fails on a failed or missing check, any error-like line in the
 output (exceptions, stack frames, `[ERROR]`, GL errors, Mixin errors, our WARNs), no "OpenAL initialized", no
 "Stopping!", no saved world, a nonzero exit or the timeout. Output: `local/run/client-startup/harness-output.log` and
 the game's own `logs/purefaithful/latest.log` there.

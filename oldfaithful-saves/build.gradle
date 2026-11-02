@@ -5,8 +5,30 @@ plugins { id 'oldfaithful.mod' }
 // runs the real dedicated server with this mod: damaged chunks, kills during saves (docs/saves.md).
 def mc = rootProject.oldfaithfulMinecraft
 
+// The scenario source set is a test-only server mod: it uses and breaks blocks whose block entity was unreadable.
+sourceSets { scenario }
+
 dependencies {
     testImplementation files(mc.namedJar)
+    scenarioCompileOnly files(mc.namedJar)
+    scenarioCompileOnly "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    scenarioCompileOnly "net.fabricmc:sponge-mixin:${mixin_version}"
+}
+
+tasks.named('compileScenarioJava') {
+    options.release = 8
+    options.encoding = 'UTF-8'
+}
+
+def scenarioJar = tasks.register('scenarioJar', Jar) {
+    from sourceSets.scenario.output
+    archiveClassifier = 'scenario-dev'
+}
+def scenarioRemap = tasks.register('scenarioRemapJar', oldfaithful.gradle.RemapJarTask) {
+    input = scenarioJar.flatMap { it.archiveFile }
+    namedMappings = mc.namedMappings
+    classpath.from(sourceSets.main.compileClasspath)
+    output = layout.buildDirectory.file('libs/oldfaithful-saves-scenario.jar')
 }
 
 tasks.named('test') {
@@ -44,7 +66,7 @@ tasks.register('serverSaveTest', Test) {
     useJUnitPlatform { includeTags 'server' }
     maxHeapSize = '512m'
     def remapped = tasks.named('remapJar')
-    dependsOn remapped
+    dependsOn remapped, scenarioRemap
     def serverClasspath = files(configurations.loaderRuntime, mc.intermediaryMappings, mc.serverJar)
     inputs.files(serverClasspath)
     outputs.upToDateWhen { false }
@@ -52,6 +74,7 @@ tasks.register('serverSaveTest', Test) {
     doFirst {
         systemProperty 'oldfaithful.server.classpath', serverClasspath.asPath
         systemProperty 'oldfaithful.saves.mod', remapped.get().output.get().asFile.absolutePath
+        systemProperty 'oldfaithful.saves.scenario.mod', scenarioRemap.get().output.get().asFile.absolutePath
         systemProperty 'oldfaithful.run', rootProject.file('local/run/saves-server-test').absolutePath
     }
 }

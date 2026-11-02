@@ -18,6 +18,15 @@ harness's own mod and lines, and our natives' Maven coordinates (`org.studioquir
 `+oldfaithful.N`; they show only in the pack's `libraries/` file names and Prism's library cache). The words come from
 `release_name`, `release_file_name` and `release_tagline` in `gradle.properties`.
 
+Old Faithful's own mods (the Fixed edition's, such as `oldfaithful-fixes`) are Old Faithful's publicly, so they keep
+`oldfaithful-*`: a mod project whose `gradle.properties` sets `oldfaithful_edition=fixed` gets that public id and jar
+name from `ModPlugin`, and the green seal (`prism/release/icons/final/oldfaithful-128.png`) for its icon. Their config
+files and log prefixes say `oldfaithful-*` too. Not yet decided, for Old Faithful's release: its pack and server
+package (the Pure ones plus these mods, named Old Faithful; the release build would take a second mod list beside
+`modProjects`), its repository and page (the mods' `contact` links still use `release_repo` and `release_homepage`,
+Pure Faithful's), and whether its mods publish in Pure Faithful's repository or their own (they stay out of this
+one until then).
+
 ## Building one
 
     ./gw release                 # everything into local/release/<version>/, with SHA256SUMS.txt
@@ -138,9 +147,26 @@ what goes public; its history starts at the first release.
 3. A GitHub release `v<version>` with every file in `local/release/<version>/` (names unchanged: `org.lwjgl.json`'s
    URLs point at them), notes from `CHANGELOG.md` and `SHA256SUMS.txt`.
 4. Check the standalone component in a Prism instance that downloads from the release (the URLs only work now).
-5. Modrinth: the mod projects from `release/drafts/modrinth.md`, the same jars.
+5. Modrinth: `python tools/modrinth.py release <version>` (below).
 6. studioquire.org: the page from `release/drafts/site-page.html`, a card, `releases.json` for `/get/pure-faithful`
    (quire-site's CLAUDE.md says how).
+
+## Modrinth
+
+Since 2026-11-02 the four mods are Modrinth projects in the **Studio Quire** organisation
+(modrinth.com/organization/studio-quire; its icon is the site's mark, rendered from quire-site's `mark.svg`), which
+the user asked the studio to manage: `pure-faithful-hardening`, `-saves`, `-speed`, `-display`, texts from
+`release/drafts/modrinth.md`, the β seal, MIT, source and issues on GitHub. The token (the user's account,
+Shoalstone) is in `local/modrinth-token.txt`, git-ignored; never print it.
+
+- A release: `python tools/modrinth.py release <version> [--type beta|release]` uploads each jar from
+  `local/release/<version>/` and checks it against `SHA256SUMS.txt` (`verify` alone re-checks).
+- b1.7.3 takes the `babric` loader only: Modrinth refuses `fabric` for game versions before 18w43b (older uploads
+  elsewhere show both).
+- Sides are set per version as v3's `environment` (`client_or_server` for hardening and saves, `client_only` for
+  speed and display); v2's `client_side`/`server_side` on the project are ignored and read back from it.
+- No dependencies between the mods: each works alone. The display mod's real requirement, our LWJGL component, isn't
+  something Modrinth can install; its description says how.
 
 ## Not checked yet
 

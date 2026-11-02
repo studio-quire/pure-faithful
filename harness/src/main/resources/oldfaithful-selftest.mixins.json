@@ -11,13 +11,18 @@
     "ChunkCacheBenchMixin",
     "GameRendererBenchMixin",
     "GameRendererStartupMixin",
+    "GameRendererFovProbeMixin",
     "MinecraftBenchMixin",
     "MinecraftStartupMixin",
     "MouseHandsOffMixin",
     "WorldSpawnBenchMixin",
     "TitleScreenStartupMixin",
     "MultiplayerScreenAccessor",
-    "WorldRendererAccessor"
+    "ScreenAccessor",
+    "WorldRendererAccessor",
+    "MinecraftPickInvoker",
+    "RedstoneTorchInvoker",
+    "FishingBobberAccessor"
   ],
   "server": [
     "PlayerManagerRideMixin"

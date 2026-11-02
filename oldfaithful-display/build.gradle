@@ -6,4 +6,5 @@ evaluationDependsOn(':oldfaithful-lwjgl')
 def bakedLwjgl = project(':oldfaithful-lwjgl').tasks.named('bakeLwjgl').flatMap { it.output }
 dependencies {
     compileOnly files(bakedLwjgl)
+    testImplementation files(bakedLwjgl)
 }

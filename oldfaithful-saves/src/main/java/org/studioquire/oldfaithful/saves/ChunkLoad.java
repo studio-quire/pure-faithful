@@ -15,12 +15,22 @@ import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
+import net.minecraft.block.Block;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.block.entity.DispenserBlockEntity;
+import net.minecraft.block.entity.FurnaceBlockEntity;
+import net.minecraft.block.entity.JukeboxBlockEntity;
+import net.minecraft.block.entity.MobSpawnerBlockEntity;
+import net.minecraft.block.entity.NoteBlockBlockEntity;
+import net.minecraft.block.entity.SignBlockEntity;
 import net.minecraft.nbt.NbtByteArray;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtInt;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtList;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkNibbleArray;
@@ -36,7 +46,8 @@ import net.minecraft.world.chunk.storage.RegionIo;
  * over the record at the next save. Here:
  * <ul>
  * <li>What can be read is kept: an entity or block entity whose data fails is left out, and arrays of the wrong size
- * are rebuilt the way vanilla rebuilds missing ones; the rest of the chunk loads.</li>
+ * are rebuilt the way vanilla rebuilds missing ones; the rest of the chunk loads. A block left without its block
+ * entity gets a fresh one.</li>
  * <li>What can't be read at all is copied to {@code corrupt/} beside the region folder before anything else happens,
  * and only then regenerated, as vanilla would, so the world goes on and the original bytes are kept for repair.</li>
  * <li>A read error (the file couldn't be read, so there's nothing to copy) is retried; if it persists, the chunk is
@@ -224,6 +235,7 @@ public final class ChunkLoad {
 		}
 		chunk.fill();
 		repairs.addAll(dropped);
+		restoreBlockEntities(chunk, repairs);
 		if (raw.status == RegionWrites.Raw.Status.OVERSIZED) {
 			Log.info("Chunk " + chunkX + ", " + chunkZ + " loaded from its oversized-chunk file " + raw.detail);
 		}
@@ -237,6 +249,66 @@ public final class ChunkLoad {
 					+ (copy != null ? " in " + Notices.shortPath(copy) : "") + ".");
 		}
 		return chunk;
+	}
+
+	/**
+	 * Each of vanilla's blocks with a block entity that has none (its data was unreadable and left out above, the whole
+	 * list was, or Pure Faithful 0.1.0 saved it that way) gets a fresh one, as if just placed: an empty chest, an idle
+	 * furnace, a blank sign. Without one, breaking a chest, furnace, dispenser or jukebox throws (their onBreak reads it
+	 * after Chunk.setBlock has already changed the block, too late for getBlockEntity's lazy creation), which stops a
+	 * server, and a sign is invisible. Made here rather than through that lazy path, whose onPlaced would turn a furnace
+	 * or dispenser to face away from its neighbours. Vanilla's own play never leaves one of these blocks without its
+	 * block entity, so in a healthy world this finds nothing. Other mods' blocks, and the piston's moving block (which
+	 * has no default, and whose code expects it may have none), are left as vanilla has them.
+	 */
+	private static void restoreBlockEntities(Chunk chunk, List<String> repairs) {
+		List<String> made = null;
+		byte[] blocks = chunk.blocks;
+		for (int i = 0; i < blocks.length; i++) {
+			int id = blocks[i] & 0xFF;
+			if (!Block.BLOCKS_WITH_ENTITY[id]) continue;
+			int x = i >> 11, z = i >> 7 & 15, y = i & 127;
+			if (chunk.blockEntities.containsKey(new BlockPos(x, y, z))) continue;
+			Block block = Block.BLOCKS[id];
+			BlockEntity fresh;
+			String what;
+			if (block == Block.CHEST) {
+				fresh = new ChestBlockEntity();
+				what = "an empty chest";
+			} else if (block == Block.FURNACE || block == Block.LIT_FURNACE) {
+				// A lit one stays lit until it next burns something, as with vanilla's own lazy creation.
+				fresh = new FurnaceBlockEntity();
+				what = "an empty furnace";
+			} else if (block == Block.DISPENSER) {
+				fresh = new DispenserBlockEntity();
+				what = "an empty dispenser";
+			} else if (block == Block.JUKEBOX) {
+				fresh = new JukeboxBlockEntity();
+				// Meta 1 says it holds a record; the fresh one doesn't, and with meta 1 no record could go in.
+				chunk.meta.set(x, y, z, 0);
+				what = "an empty jukebox";
+			} else if (block == Block.NOTE_BLOCK) {
+				fresh = new NoteBlockBlockEntity();
+				what = "a note block on its lowest note";
+			} else if (block == Block.SIGN || block == Block.WALL_SIGN) {
+				fresh = new SignBlockEntity();
+				what = "a blank sign";
+			} else if (block == Block.SPAWNER) {
+				fresh = new MobSpawnerBlockEntity();
+				what = "a pig spawner (the block's default)";
+			} else {
+				continue;
+			}
+			chunk.setBlockEntity(x, y, z, fresh);
+			what += " at " + (chunk.x * 16 + x) + ", " + y + ", " + (chunk.z * 16 + z);
+			Log.warn("Put " + what + " where the block had no block entity");
+			if (made == null) made = new ArrayList<>();
+			made.add(what);
+		}
+		if (made == null) return;
+		int shown = Math.min(made.size(), 5);
+		repairs.add("put in their place: " + String.join(", ", made.subList(0, shown))
+				+ (made.size() > shown ? " and " + (made.size() - shown) + " more" : ""));
 	}
 
 	private static boolean isByteArray(NbtElement e, int length) {

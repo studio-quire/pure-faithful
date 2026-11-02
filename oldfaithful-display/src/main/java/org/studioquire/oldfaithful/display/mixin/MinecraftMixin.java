@@ -3,6 +3,7 @@ package org.studioquire.oldfaithful.display.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.Minecraft;
+import org.lwjgl.LWJGLException;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,7 +26,8 @@ import org.studioquire.oldfaithful.lwjgl.Settings;
  * after the window opens too, so the loading screen fits a window that opened at another size than the game's
  * (the launcher's size, maximised, scaled to the display).</li>
  * <li>Where the window opens (the launcher's window settings, or where it was) is WindowPlacement's; as the game
- * stops, the window's placement is kept there if remembering is on.</li>
+ * stops, the window's placement is kept there if remembering is on, fullscreen or not; a game that stopped fullscreen
+ * opens fullscreen again, over its kept window.</li>
  * <li>F11's fullscreen leaves the display mode alone (borderless, or exclusive at the desktop resolution) and the
  * window keeps its own size for when it comes back.</li>
  * <li>Losing focus no longer drops borderless fullscreen (it would on every alt-tab); exclusive still does, as
@@ -36,6 +38,7 @@ import org.studioquire.oldfaithful.lwjgl.Settings;
 abstract class MinecraftMixin {
 	@Shadow public int displayWidth;
 	@Shadow public int displayHeight;
+	@Shadow private boolean fullscreen;
 
 	@Shadow
 	private void resize(int width, int height) {
@@ -54,6 +57,16 @@ abstract class MinecraftMixin {
 
 	@Inject(method = "init", at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/Display;create()V", shift = At.Shift.AFTER, remap = false))
 	private void oldfaithful$sizeFromWindow(CallbackInfo ci) {
+		// Fullscreen when it last stopped (window.remember): as F11 would, over the window just opened where it was,
+		// so the game's own flag agrees and one F11 brings that window back.
+		if (WindowPlacement.startFullscreen() && !fullscreen) {
+			try {
+				Display.setFullscreen(true);
+				fullscreen = true;
+			} catch (LWJGLException e) {
+				System.out.println("[purefaithful-display] WARN Could not open fullscreen as the game was when it stopped: " + e);
+			}
+		}
 		oldfaithful$matchFramebuffer();
 	}
 

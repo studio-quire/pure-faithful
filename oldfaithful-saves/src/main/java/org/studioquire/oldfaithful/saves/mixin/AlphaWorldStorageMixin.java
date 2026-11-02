@@ -17,12 +17,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.studioquire.oldfaithful.saves.SafeFiles;
+import org.studioquire.oldfaithful.saves.UntickedNether;
 import org.studioquire.oldfaithful.saves.WorldFiles;
 
 /**
  * level.dat: the same data and the same rotation (level.dat_old kept), but the new file is forced to disk before it
  * replaces the old, off the game thread; loading falls back to a complete level.dat_new left by a crash between the
- * renames, and level.dat files that can't be read are copied aside before the game replaces them.
+ * renames, and level.dat files that can't be read are copied aside before the game replaces them. A server's unticked
+ * Nether never writes it (UntickedNether).
  */
 @Mixin(AlphaWorldStorage.class)
 abstract class AlphaWorldStorageMixin {
@@ -33,6 +35,7 @@ abstract class AlphaWorldStorageMixin {
 	@Inject(method = "save(Lnet/minecraft/world/WorldProperties;Ljava/util/List;)V", at = @At("HEAD"), cancellable = true)
 	private void oldfaithful$save(WorldProperties properties, List players, CallbackInfo ci) {
 		ci.cancel();
+		if (UntickedNether.isStale(properties)) return;
 		oldfaithful$queue(properties.asNbt(players));
 	}
 

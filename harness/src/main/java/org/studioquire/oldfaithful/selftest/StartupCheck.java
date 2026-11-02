@@ -35,6 +35,8 @@ public final class StartupCheck {
 	private static final String WORLD = "oldfaithful-startup";
 	private static final int WORLD_TICKS = 100;
 	private static final boolean MENU_ONLY = Boolean.getBoolean("oldfaithful.selftest.menuOnly");
+	/** A first start of Old Faithful (no options.txt yet): checked at the title screen, which it then quits by its button. */
+	private static final boolean FIRST_START = Boolean.getBoolean("oldfaithful.selftest.firstStart");
 	private static final String REARRANGE = System.getProperty("oldfaithful.selftest.rearrange");
 	private static final long STALL_MS = 150_000;
 
@@ -42,6 +44,8 @@ public final class StartupCheck {
 	private static int phase;
 	private static int wait;
 	private static int worldTicks;
+	private static FixesCheck fixes;
+	private static OptionsCheck options;
 	private static long startedAt;
 	private static String clipboard;
 	/** Rows of beta's version-line grey in the title screen's corner, counted as separate lines; -1 until drawn. */
@@ -91,7 +95,7 @@ public final class StartupCheck {
 		}
 	}
 
-	private static void step(Minecraft mc) {
+	private static void step(Minecraft mc) throws Exception {
 		switch (phase) {
 			case 0:
 				if (!(mc.currentScreen instanceof TitleScreen) || titleLines < 0) return;
@@ -104,6 +108,9 @@ public final class StartupCheck {
 						&& "1".equals(SDLHints.SDL_GetHint(SDLHints.SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE)));
 				vsyncCheck();
 				windowChecks(mc);
+				fullscreenChecks(mc);
+				if (OptionsCheck.loaded()) OptionsCheck.titleScreen(results, mc.currentScreen);
+				if (FIRST_START) OptionsCheck.firstStart(results, mc);
 				System.out.println("[oldfaithful-selftest] GL: " + GL11.glGetString(GL11.GL_VERSION) + " / " + GL11.glGetString(GL11.GL_RENDERER));
 				if (REARRANGE != null) {
 					phase = 10;
@@ -151,7 +158,21 @@ public final class StartupCheck {
 				results.check("world created, loaded and running: player at y " + Math.round(mc.player.y) + ", world time " + mc.world.getTime()
 						+ " after " + worldTicks + " game ticks", mc.world.getTime() >= WORLD_TICKS / 2 && mc.currentScreen == null);
 				results.check("sound system initialised (paulscode on our OpenAL)", paulscode.sound.SoundSystem.initialized());
-				finish(mc);
+				if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("oldfaithful-fixes")) {
+					fixes = new FixesCheck(results);
+					fixes.start(mc);
+					phase = 5;
+					return;
+				}
+				optionsOrFinish(mc);
+				return;
+			case 5:
+				// The Fixed edition's fixes in the running world (`clientStartupTestFixed`).
+				if (fixes.tick(mc)) optionsOrFinish(mc);
+				return;
+			case 6:
+				// Old Faithful's options mod in the running world.
+				if (options.tick(mc)) finish(mc);
 				return;
 			case 10: {
 				// As a player would: out of maximised, then resized and moved. The display mod sees it through the
@@ -209,6 +230,41 @@ public final class StartupCheck {
 		}
 	}
 
+	private static boolean sdlFullscreen() {
+		return (SDLVideo.SDL_GetWindowFlags(Window.handle()) & SDLVideo.SDL_WINDOW_FULLSCREEN) != 0;
+	}
+
+	private static String windowState(Minecraft mc) {
+		return Display.getWidth() + "x" + Display.getHeight() + " at " + Display.getX() + "," + Display.getY() + ", maximised " + maximized()
+				+ ", the game's size " + mc.displayWidth + "x" + mc.displayHeight + ", SDL fullscreen flag " + sdlFullscreen();
+	}
+
+	/**
+	 * Fullscreen kept between launches ({@code window.remember}): {@code expectFullscreen} checks the window opened
+	 * so; {@code leaveFullscreen} then presses F11's toggle, which must bring back the kept window (the expected size,
+	 * position and maximised state again); {@code fullscreenAtStop} goes fullscreen so the run stops in it. Borderless
+	 * only (the default): exclusive would change the display's video mode, which the private desktop can't contain.
+	 */
+	private static void fullscreenChecks(Minecraft mc) {
+		String expect = System.getProperty("oldfaithful.selftest.expectFullscreen");
+		if (expect != null) {
+			boolean want = Boolean.parseBoolean(expect);
+			results.check("window opened " + (want ? "fullscreen" : "not fullscreen") + ": " + windowState(mc), Display.isFullscreen() == want);
+		}
+		if (Boolean.getBoolean("oldfaithful.selftest.leaveFullscreen")) {
+			mc.toggleFullscreen();
+			String size = System.getProperty("oldfaithful.selftest.expectSize"), at = System.getProperty("oldfaithful.selftest.expectAt");
+			results.check("F11 out of fullscreen: back to the kept window (" + size + " at " + at + ", maximised): " + windowState(mc),
+					!Display.isFullscreen() && !sdlFullscreen() && maximized()
+							&& (Display.getWidth() + "x" + Display.getHeight()).equals(size) && (Display.getX() + "," + Display.getY()).equals(at));
+		}
+		if (Boolean.getBoolean("oldfaithful.selftest.fullscreenAtStop")) {
+			if (Settings.exclusiveFullscreen) throw new IllegalStateException("fullscreenAtStop needs borderless fullscreen");
+			mc.toggleFullscreen();
+			results.check("F11 into fullscreen, to stop in it: " + windowState(mc), Display.isFullscreen());
+		}
+	}
+
 	/**
 	 * Called after the title screen draws, before the frame is shown: counts the lines in the version text's grey
 	 * (b1.7.3's 0x505050, which its darkened background never reaches) above the logo, and saves that corner.
@@ -242,9 +298,20 @@ public final class StartupCheck {
 		titleLines = lines;
 	}
 
+	private static void optionsOrFinish(Minecraft mc) throws ReflectiveOperationException {
+		if (!OptionsCheck.loaded()) {
+			finish(mc);
+			return;
+		}
+		options = new OptionsCheck(results);
+		options.start(mc);
+		phase = 6;
+	}
+
 	private static void finish(Minecraft mc) {
 		phase = 99;
 		results.done();
+		if (FIRST_START && OptionsCheck.quit(mc)) return;
 		// As the window's close button does: the game saves and stops itself.
 		mc.scheduleStop();
 	}

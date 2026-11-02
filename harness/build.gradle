@@ -9,6 +9,9 @@ evaluationDependsOn(':oldfaithful-display')
 evaluationDependsOn(':oldfaithful-speed')
 evaluationDependsOn(':oldfaithful-saves')
 evaluationDependsOn(':oldfaithful-lwjgl')
+// The Fixed edition's mods, where present (settings.gradle).
+def fixedModProjects = [':oldfaithful-fixes', ':oldfaithful-lighting', ':oldfaithful-options'].findAll { findProject(it) != null }
+fixedModProjects.each { evaluationDependsOn(it) }
 
 configurations {
     // What a launcher puts on the classpath for Fabric: the loader, Mixin and ASM (MixinExtras is inside the loader).
@@ -35,6 +38,9 @@ def benchMods = [project(':oldfaithful-hardening').tasks.named('remapJar'), task
 // The speed mod (client only) joins every client test; the benchmark's sdl and lwjgl2 configurations leave it out,
 // as vanilla's baseline, and its `speed` configuration adds it to sdl.
 def speedMod = project(':oldfaithful-speed').tasks.named('remapJar')
+// The Fixed edition's own mods join the server test and the client audits, which check that every mixin applies;
+// `clientStartupTestFixed` runs them in a world.
+def fixedMods = fixedModProjects.collect { project(it).tasks.named('remapJar') }
 
 tasks.register('serverTest', oldfaithful.gradle.ServerTestTask) {
     group = 'verification'
@@ -42,7 +48,7 @@ tasks.register('serverTest', oldfaithful.gradle.ServerTestTask) {
     gameJar = mc.serverJar
     intermediaryMappings = mc.intermediaryMappings
     loaderClasspath.from(configurations.loaderRuntime)
-    mods.from(testedMods)
+    mods.from(testedMods, fixedMods)
     runDir = rootProject.layout.projectDirectory.dir('local/run/server-test')
     if (gameJava.isPresent()) javaExecutable = gameJava
 }
@@ -67,7 +73,7 @@ tasks.register('clientAudit', oldfaithful.gradle.ClientAuditTask) {
     gameJar = mc.clientJar
     intermediaryMappings = mc.intermediaryMappings
     loaderClasspath.from(configurations.loaderRuntime)
-    mods.from(testedMods, speedMod)
+    mods.from(testedMods, speedMod, fixedMods)
     runDir = rootProject.layout.projectDirectory.dir('local/run/client-audit')
     if (gameJava.isPresent()) javaExecutable = gameJava
     // Kept between runs: the first run downloads every sound (about 44 MB) from Mojang, later ones find them present.
@@ -168,7 +174,7 @@ tasks.register('clientAuditSdl', oldfaithful.gradle.ClientAuditTask) {
     gameJar = mc.clientJar
     intermediaryMappings = mc.intermediaryMappings
     loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
-    mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod)
+    mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods)
     runDir = rootProject.layout.projectDirectory.dir('local/run/client-audit-sdl')
     if (gameJava.isPresent()) javaExecutable = gameJava
     extraJvmArgs.add("-Doldfaithful.selftest.soundsGameDir=${rootProject.file('local/cache/selftest-sounds')}")
@@ -283,6 +289,26 @@ tasks.register('clientStartupTest', oldfaithful.gradle.ClientStartupTask) {
     runDir = rootProject.layout.projectDirectory.dir('local/run/client-startup')
     if (gameJava.isPresent()) javaExecutable = gameJava
 }
+// Old Faithful (the Fixed edition): the same with its own mods, whose fixes FixesCheck then sets up and checks in the
+// world (docs/fixes.md).
+if (!fixedMods.isEmpty()) {
+    tasks.register('clientStartupTestFixed', oldfaithful.gradle.ClientStartupTask) {
+        group = 'verification'
+        description = 'The start-up test with the Fixed edition mods, and their fixes checked in the running world.'
+        dependsOn extractLwjgl3Natives
+        gameJar = mc.clientJar
+        intermediaryMappings = mc.intermediaryMappings
+        loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
+        mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods)
+        natives = lwjgl3NativesDir
+        soundsGameDir = rootProject.layout.projectDirectory.dir('local/cache/selftest-sounds')
+        privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
+        runDir = rootProject.layout.projectDirectory.dir('local/run/client-startup-fixed')
+        // oldfaithful-options' window defaults and first start (ClientStartupTask), where it exists.
+        oldFaithful = findProject(':oldfaithful-options') != null
+        if (gameJava.isPresent()) javaExecutable = gameJava
+    }
+}
 // The same on Linux x64, in Docker (tools/in_linux.py): `clientStartupTestLinux` runs it on both test images.
 def clientStartupLinux = linuxImages.collect { img ->
     tasks.register("clientStartupTestLinux-${img}", oldfaithful.gradle.ClientStartupTask) {
@@ -315,7 +341,9 @@ tasks.register('benchSetup') {
     group = 'oldfaithful'
     description = 'Writes local/bench/launch.json for tools/bench.py: how to launch each benchmark configuration.'
     def display = project(':oldfaithful-display').tasks.named('remapJar')
+    def lightingMod = findProject(':oldfaithful-lighting')?.tasks?.named('remapJar')
     dependsOn extractLwjgl3Natives, extractNatives, bakedLwjgl, benchMods, display, speedMod
+    if (lightingMod != null) dependsOn lightingMod
     inputs.file(mc.clientJar)
     inputs.file(mc.intermediaryMappings)
     def out = rootProject.file('local/bench/launch.json')
@@ -342,6 +370,9 @@ tasks.register('benchSetup') {
             ],
             sounds: rootProject.file('local/cache/selftest-sounds/resources').absolutePath,
         ]
+        // Old Faithful's lighting (docs/lighting.md) on top of speed, where the mod is in the build.
+        if (lightingMod != null) spec.configs.lighting = [classpath: spec.configs.speed.classpath, natives: spec.configs.speed.natives,
+                                                          mods: spec.configs.speed.mods + [jar(lightingMod)]]
         out.parentFile.mkdirs()
         out.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(spec))
         logger.lifecycle("Wrote ${out}")

@@ -5,6 +5,9 @@ goes, and the plan that follows from it.
 
 ## Rules (user, 2026-11-01)
 
+- **Reliability first** (user, 2026-11-02): what they meant by "pure wins only" is above all never trading safety,
+  security or stability for speed; speed trade-offs in general aren't ruled out, and fixes may cost speed. The rule as
+  first written, which the work so far followed:
 - **Pure wins only.** An optimisation goes in only if it trades nothing away: looks, behaviour, world generation
   (bit-identical), mod compatibility, memory, determinism, worse lows for better averages. Anything that costs
   something is written up with the cost stated concretely and goes to the user as a question, or is dropped.
@@ -117,6 +120,7 @@ call inside the same cloud method (compatible), SmoothBeta replaces the same chu
 | **Chunk maps hashed properly** (`ChunkMap`, `ChunkCacheMixin`, `MultiplayerChunkCacheMixin`) | Same keys (ChunkPos.hashCode, collisions and all), same equality, same answers; only the bucket hash mixes all the key's bits and the last hit is remembered. Unit-tested against HashMap through 400,000 random operations. Only replaces a map that is still vanilla's HashMap |
 | **Light memoised per chunk rebuild** (`WorldRegionMixin`, `ChunkBuilderMixin`, `LightCache`) | Smooth lighting asks the rebuild's region for the same positions' light many times per block. The value is a function of the position while the rebuild runs (nothing changes the world during meshing), so the first answer stands. On only for the region `rebuild` makes, off when it returns; regions made anywhere else never cache |
 | **The unused frustum skipped** (`GameRendererFrustumMixin`) | `renderFrame` computes the frustum (two `glGetFloatv`, each a sync with the driver) and drops it; the `FrustumCuller` made a few lines later computes it again from the then-current matrices, and that is the one culling uses. Nothing reads it in between (sky and fog setup only) |
+| **Double slabs mesh no hidden top** (`DoubleSlabFacesMixin`, 2026-11-02, `docs/bugs.md` #47) | `SlabBlock.isSideVisible` computes the full block's answer for the double slab, drops it (a missing `return`) and applies the half slab's rule, which always shows the top. Answered with the full block's rule, only the top under an opaque block goes: it lies between two opaque blocks, whose side faces enclose it, and the block above draws no face there (culled against the opaque double slab), so depth hid it from every outside view. Half slabs and modded slabs keep their rule. Reasoned, not measured: generated worlds have no double slabs |
 
 Robustness (2026-11-02, after an outside review): injectors are `require 0`, so another mod reshaping a target
 turns that optimisation off instead of stopping the game. Each handler falls back to vanilla when its partners didn't

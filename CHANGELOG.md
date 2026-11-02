@@ -4,6 +4,22 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.1 (2026-11-02)
+
+Bug fixes.
+
+- Saves: a chest, furnace, dispenser, jukebox, sign, note block or spawner whose contents can't be read now loads
+  empty (reported with the rest of the damage). 0.1.0 left it with nothing behind it, and breaking such a chest,
+  furnace, dispenser or jukebox crashed the game or stopped the server; worlds that 0.1.0 saved that way are mended
+  when the chunk next loads.
+- Server: with `allow-nether=false`, stopping or `save-all` no longer puts the world's time and weather back to where
+  the session began (time 0 on a world made that way), nor replaces a new world's spawn point with the Nether's. A
+  beta 1.7.3 bug; servers with the Nether on save as before.
+- A double slab under another block no longer builds a face nobody can see: a little less work, the same picture.
+- Display settings: `window.remember` keeps fullscreen too, and a new `window.startMaximized` opens the window
+  maximised when neither Prism nor a remembered window says otherwise. Both are off here, so nothing changes unless
+  you turn them on.
+
 ## 0.1.0 (2026-11-02)
 
 The first release of Pure Faithful, for Windows.

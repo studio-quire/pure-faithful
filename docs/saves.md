@@ -1,6 +1,6 @@
 # Saves that can't lose a world (`oldfaithful-saves`)
 
-Claude Opus 5.5, 2026-11-02. Fixes `docs/bugs.md` #1 and #2, which the user put in Purist (2026-11-02): nothing
+Claude Opus 5.5, 2026-11-02. Fixes `docs/bugs.md` #1 and #2 (and #52, a server's level.dat), which the user put in Purist (2026-11-02): nothing
 changes in play, the files stay b1.7.3's own format (plain b1.7.3 and other tools read them, and we read theirs), and
 a crash, a kill or a power cut leaves every file as it was before a save or after it, never damaged. Both editions,
 client and server.
@@ -20,6 +20,14 @@ client and server.
   terrain is generated and saved over the record. Damaged data can also crash the game outright on every load (an
   array claiming two billion bytes, an unknown tag type, a block array of the wrong size).
 - **level.dat**: renamed into place without being forced to disk first (a power cut can leave it empty).
+- **level.dat on a server with `allow-nether=false`** (`docs/bugs.md` #52): `MinecraftServer.loadWorld` always makes
+  the Nether, a `ReadOnlyServerWorld` with its own copy of level.dat's data (`World`'s constructor reads it; on a new
+  world it runs its own spawn search, landing near 0, 64, 0), and every world's save writes level.dat with its own
+  copy. The tick loop skips the Nether when it's off, so its copy never advances, and `saveWorlds` (save-all, and
+  stopping) saves it after the overworld: every stop puts back the time and weather the session began with (time 0,
+  forever, on a world made that way), and a new world's spawn becomes the Nether's. Autosaves come only from the
+  overworld, so a kill keeps the right file and a clean stop loses it. Seen on vanilla's server and Pure Faithful
+  0.1.0 (2026-11-02).
 - **Player files** (server): the old file is deleted, then a shared `_tmp_.dat` renamed over it; a crash in between
   loses the player's inventory and position.
 - **Map files and idcounts.dat** (`data/`): overwritten in place.
@@ -52,6 +60,20 @@ walked and every length checked before the game's parser sees it (`NbtCheck`), a
 - what can be read is kept: an entity or block entity whose data throws is left out (`AlphaChunkStorageMixin`),
   arrays of the wrong size are rebuilt as vanilla rebuilds missing ones (sky light and height map recomputed; block
   data and block light reset);
+- every one of vanilla's blocks with a block entity that has none gets a fresh one (`ChunkLoad.restoreBlockEntities`):
+  an empty chest, furnace, dispenser or jukebox (its meta set to "no record"), a blank sign, a note block on its
+  lowest note, a pig spawner (the block's default); listed with the repairs, so the chunk is copied aside and saved
+  repaired like any other. Without it, breaking a chest, furnace, dispenser or jukebox throws: their `onBreak` reads
+  the block entity without a null check, and `Chunk.setBlock` swaps the block id before calling it, so
+  `Chunk.getBlockEntity`'s lazy creation no longer applies; a dedicated server stops ("Unexpected exception"). Every
+  other use (opening, redstone, a note block played) goes through the lazy creation and works, though for a furnace
+  or dispenser that runs `onPlaced`, which turns it to face away from its neighbours; made directly here, the facing
+  is kept. A sign without one is invisible. 0.1.0 left blocks this way when it left out an unreadable block entity,
+  and saved the chunk so (found 2026-11-02), which is why every loaded chunk is checked, not only damaged ones:
+  vanilla's own play never leaves one of these blocks without its block entity, so a healthy world finds nothing,
+  and the check is a pass over the block array. A piston's moving block (36) has no default (`createBlockEntity` is
+  null) and vanilla's code for it handles none, so it's left as is, as are other mods' blocks. A lit furnace stays lit
+  until it next burns something;
 - what can't be read at all is copied to `corrupt/` in the world (or dimension) folder, bytes exactly as found plus a
   `.txt` note, forced to disk, and only then regenerated as vanilla would, so the world goes on and the original is
   kept for repair (a damaged record has nothing better to offer, and later Minecraft versions do the same);
@@ -69,7 +91,14 @@ file forced before either rename, off the game thread (the game saves level.dat 
 two renames leaves a complete `level.dat_new`, which loading prefers to the older `level.dat_old`. If neither
 level.dat can be read, both are copied to `corrupt/` and the player told before the game writes new ones; if they
 can't be copied, level.dat isn't saved this session. Renaming a world in the menu replaces level.dat whole
-(`AlphaWorldStorageSourceMixin`) instead of rewriting it in place.
+(`AlphaWorldStorageSourceMixin`) instead of rewriting it in place. On a server with `allow-nether=false`, the
+Nether's copy of the data is marked when the world is made (`ReadOnlyServerWorldMixin`, the tick loop's own check) and
+never written (`UntickedNether`); the overworld's, saved just before it and by every autosave, stands. With the Nether
+on nothing changes: there vanilla's Nether still writes last, so level.dat holds its spawn (a new world's spawn moves
+to near 0, 64, 0 after the first start) and its weather (frozen, the Nether has none), and a night slept through is
+undone by a restart (the Nether doesn't skip it). Beta's behaviour that every server with the Nether had, left to Old
+Faithful (`docs/bugs.md` #52). Single player is untouched: one world at a time, the next made from a copy of the
+last's data after it's saved (`Minecraft.changeDimension`).
 
 **Player files** (`AlphaWorldStoragePlayersMixin`, server): written to a temporary file of its own, forced, renamed
 over `<name>.dat` in one step; a queued save is finished before that player's file is read; an unreadable one is
@@ -101,18 +130,25 @@ save's `commitAll` returns only when every save, including one another thread is
   constructor that wipes unaligned indexes, and spent most of its time compressing; its "0 in 150" was weaker
   evidence than it looked.)
 - `./gw :oldfaithful-saves:serverSaveTest` (about 30 s): the real dedicated server. Four chunks beside spawn damaged
-  four ways (damaged compressed data, unknown compression, a chest whose data throws, sky light of the wrong size):
+  four ways (damaged compressed data, unknown compression, unreadable block entities, sky light of the wrong size):
   the first two are copied byte for byte to `corrupt/` and regenerated, the other two load without the bad part and
-  are saved repaired, all four reported. Then the spawn region is left 300 bytes past a whole sector: the server pads
+  are saved repaired, all four reported. The block-entity chunk holds a chest, furnace, dispenser, jukebox (holding a
+  record), note block, sign, spawner and piston moving block, each with a field of the wrong type; a fifth, otherwise
+  sound chunk a chest with no block entity at all (as 0.1.0 saved them). A test-only server mod (the `scenario`
+  source set) then checks each has a fresh block entity of the right kind with its facing kept (none for the moving
+  block), puts a diamond in each container and a record in the jukebox, and breaks them all: the diamonds and the
+  record drop and the server runs on. The control, before the fix: the first chest broken
+  threw in `ChestBlock.onBreak` and the server stopped ("Unexpected exception"). Then the spawn region is left 300 bytes past a whole sector: the server pads
   it at the end and every chunk survives. Then the server is killed outright 8 times during bursts of save-all (about
   100 in all): after each kill, every region is whole sectors, no entry has gone, and every chunk and level.dat read
   cleanly with vanilla's reader. A final start after the kills reports nothing. (These kills land mid-write less often
   than KillTest's; KillTest is the sharper check.) Each run has a world folder of its own under
   `local/run/saves-server-test/` (kept if it fails, cleared after two hours) and kills its servers if its JVM exits:
   runs from two sessions once shared one world, and one's server saving changed region files between the other's
-  check and its edits. The world is started twice before it's damaged: on a new world vanilla's server lets the nether
-  run its own spawn search and save level.dat last, so the first start's generated area needn't surround the spawn
-  level.dat ends up with.
+  check and its edits. A second test, `levelDatSurvivesWithoutTheNether` (about 20 s), starts a new world with
+  `allow-nether=false` twice: while it runs, level.dat (written then by the overworld alone) is read; after each stop
+  the time must not have gone back, the spawn must be the same, and the weather's countdown not reset. The control,
+  the fix switched off: time 119 while running, 0 after the stop, spawn 0, 64, 0.
 - The harness's game tests all carry this mod (`docs/building.md`): `clientAudit` and `clientAuditSdl` apply every
   client mixin, `clientStartupTest` makes a world, plays 100 ticks and saves on leaving (the world it left read
   cleanly, 299 chunks, checked once), `serverTest` and `multiplayerTest` run the server with it (the server package
