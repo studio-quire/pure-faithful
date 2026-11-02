@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.studioquire.oldfaithful.hardening.Branding;
 
-/** "Pure Faithful <version>" under "Minecraft Beta 1.7.3" in the title screen's corner, drawn as beta draws that line. */
+/** "Pure Faithful <version>" (or an edition's name, {@link Branding}) under "Minecraft Beta 1.7.3" in the title screen's corner, drawn as beta draws that line. */
 @Mixin(TitleScreen.class)
 abstract class TitleScreenMixin extends Screen {
 	@Inject(method = "render", at = @At(value = "INVOKE", ordinal = 0, shift = At.Shift.AFTER,

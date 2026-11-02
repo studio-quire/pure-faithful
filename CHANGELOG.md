@@ -4,6 +4,14 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.2 (2026-11-02)
+
+Released with the first Old Faithful, which carries it. Nothing changes for Pure Faithful players.
+
+- The title line can name an edition built on Pure Faithful instead: Old Faithful says "Old Faithful" and its own
+  version there.
+- The pack's README and this one point to Old Faithful.
+
 ## 0.1.1 (2026-11-02)
 
 Bug fixes.

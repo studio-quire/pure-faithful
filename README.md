@@ -8,9 +8,9 @@ lose your world. Beta's own bugs and quirks stay. Open source, from [Studio Quir
 Pure Faithful is mods, not a modified game: your launcher downloads Minecraft itself from Mojang, with your own
 account. Nothing of Mojang's is in this repository or in our downloads.
 
-**Old Faithful**, coming later, is Pure Faithful plus fixes for beta's own bugs, with the ones that are part of its
-feel kept as options. Pure Faithful is for Windows now; macOS and Linux follow. If you'd like to help test on them,
-open an issue.
+**[Old Faithful](https://github.com/studio-quire/old-faithful)** is Pure Faithful plus fixes for beta's own clear
+mistakes, each on a switch, with what players built their game around kept as beta had it. Pure Faithful is for
+Windows now; macOS and Linux follow. If you'd like to help test on them, open an issue.
 
 ## What it does
 

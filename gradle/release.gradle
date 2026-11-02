@@ -1,16 +1,52 @@
-// The release (docs/release.md): the pack a player imports into Prism, the mods and the LWJGL component on their own
-// for existing instances, and the server package, each with the notices and sources its contents' licences ask for.
-// `./gw release` writes everything for one version into local/release/<version>/, with SHA256SUMS.txt. Nothing here
-// publishes anything.
+// The release (docs/release.md): for each edition, the pack a player imports into Prism and the server package, each
+// with the notices and sources its contents' licences ask for; for Pure Faithful also its mods and the LWJGL
+// component on their own, for existing instances; for Old Faithful its own mods on their own (the rest are Pure
+// Faithful's, on Pure Faithful's release). `./gw release` writes Pure Faithful's into local/release/<version>/,
+// `./gw releaseFixed` Old Faithful's into local/release/old-faithful-<version>/, each with SHA256SUMS.txt. Nothing
+// here publishes anything.
 
 import groovy.json.JsonOutput
 import java.security.MessageDigest
 
-def releaseVersion = oldfaithful_version
-def releaseTag = "v${releaseVersion}"
-def downloadBase = "https://github.com/${release_repo}/releases/download/${releaseTag}/"
-def componentVersion = "${releaseVersion}+lwjgl.${lwjgl3_version}"
+def pureVersion = oldfaithful_version
+def downloadBase = "https://github.com/${release_repo}/releases/download/v${pureVersion}/"
+def componentVersion = "${pureVersion}+lwjgl.${lwjgl3_version}"
+def componentAssetName = "purefaithful-lwjgl-${pureVersion}.jar"
 def staging = layout.buildDirectory.dir('release')
+
+def pureMods = ['oldfaithful-hardening', 'oldfaithful-saves', 'oldfaithful-speed', 'oldfaithful-display']
+def pureServerMods = ['oldfaithful-hardening', 'oldfaithful-saves']
+// Old Faithful's own mods. Pure Faithful's public snapshot has none of them (settings.gradle), so neither the edition
+// nor its tasks exist there.
+def fixedMods = ['oldfaithful-fixes', 'oldfaithful-lighting', 'oldfaithful-options']
+def fixedServerMods = ['oldfaithful-fixes', 'oldfaithful-lighting']
+def hasFixed = fixedMods.every { findProject(":${it}") != null }
+if (hasFixed) {
+    // A new mod of the edition must be placed in the release (and its server package) on purpose.
+    def unlisted = subprojects.findAll {
+        def props = it.file('gradle.properties')
+        props.isFile() && props.getText('UTF-8') =~ /(?m)^oldfaithful_edition=fixed\s*$/ && !(it.name in fixedMods)
+    }
+    if (unlisted) throw new GradleException("Old Faithful mods missing from gradle/release.gradle's fixedMods: ${unlisted*.name}")
+}
+
+// What differs between the editions' releases. The Pure Faithful mods and LWJGL component are the same in both.
+ext.releaseEditions = [
+    pure: [name: release_name, fileName: release_file_name, tagline: release_tagline, repo: release_repo,
+           homepage: release_homepage, version: pureVersion, icon: 'purefaithful', licenceFolder: 'pure-faithful',
+           mods: pureMods, serverMods: pureServerMods, serverModsText: 'hardening and saves',
+           packReadme: 'release/pack-README.txt', serverReadme: 'server/README.txt',
+           packHeader: 'release/notices/00-header-pack.txt', serverHeader: 'release/notices/00-header-server.txt',
+           out: "local/release/${pureVersion}"],
+]
+if (hasFixed) releaseEditions.fixed = [
+    name: fixed_release_name, fileName: fixed_release_file_name, tagline: fixed_release_tagline, repo: fixed_release_repo,
+    homepage: fixed_release_homepage, version: fixed_edition_version, icon: 'oldfaithful', licenceFolder: 'old-faithful',
+    mods: pureMods + fixedMods, serverMods: pureServerMods + fixedServerMods,
+    serverModsText: 'hardening, saves, fixes and lighting',
+    packReadme: 'release/old-faithful/pack-README.txt', serverReadme: 'release/old-faithful/server-README.txt',
+    packHeader: 'release/old-faithful/notices-header-pack.txt', serverHeader: 'release/old-faithful/notices-header-server.txt',
+    out: "local/release/old-faithful-${fixed_edition_version}"]
 
 configurations {
     // The component's Windows natives (the first release is Windows only; docs/release.md).
@@ -37,71 +73,91 @@ dependencies {
     releaseSources "org.ow2.sat4j:org.ow2.sat4j.pb:${loader_sat4j_version}:sources@jar"
 }
 
-def releaseTokens = ([
-    VERSION              : releaseVersion,
-    NAME                 : release_name,
-    TAGLINE              : release_tagline,
-    REPO                 : release_repo,
-    HOMEPAGE             : release_homepage,
-    FABRIC_LOADER_VERSION: fabric_loader_version,
-    LWJGL_VERSION        : componentVersion,
-    OLDFAITHFUL_VERSION  : releaseVersion,
-    LWJGL3_NATIVES_VERSION: lwjgl3_natives_version,
-    SDL3_VERSION         : sdl3_version,
-    OPENAL_VERSION       : openal_version,
-    TINY_REMAPPER        : loader_tiny_remapper_version,
-    SAT4J                : loader_sat4j_version,
-    INTERMEDIARY         : intermediary,
-    MINECRAFT_CLIENT_URL : minecraft_client_url,
-    MINECRAFT_CLIENT_SHA1: minecraft_client_sha1,
-    MINECRAFT_CLIENT_SIZE: minecraft_client_size,
-    LOADER_LIBRARIES     : (["net.fabricmc:fabric-loader:${fabric_loader_version}", "net.fabricmc:sponge-mixin:${mixin_version}"] +
-            ['asm', 'asm-analysis', 'asm-commons', 'asm-tree', 'asm-util'].collect { "org.ow2.asm:${it}:${asm_version}" })
-            .collect { "        {\"name\": \"${it}\", \"MMC-hint\": \"local\"}" }.join(',\n'),
-]).collectEntries { k, v -> [k, v.toString()] }
-def filterTokens = { String line ->
-    line.replaceAll(/@([A-Z0-9_]+)@/) { all, name ->
-        if (!releaseTokens.containsKey(name)) throw new GradleException("unknown token @${name}@")
-        releaseTokens[name]
+// The @TOKENS@ in the templates, for one edition. VERSION, NAME and the rest are the edition's; PURE_* and the
+// component's are Pure Faithful's, which Old Faithful carries as they are.
+ext.releaseTokens = { Map ed ->
+    ([
+        VERSION              : ed.version,
+        NAME                 : ed.name,
+        TAGLINE              : ed.tagline,
+        REPO                 : ed.repo,
+        HOMEPAGE             : ed.homepage,
+        ICON                 : ed.icon,
+        SERVER_MODS          : ed.serverModsText,
+        PURE_NAME            : release_name,
+        PURE_VERSION         : pureVersion,
+        PURE_REPO            : release_repo,
+        SERVER_SHA1          : minecraft_server_sha1,
+        FABRIC_LOADER_VERSION: fabric_loader_version,
+        LWJGL_VERSION        : componentVersion,
+        OLDFAITHFUL_VERSION  : pureVersion,
+        LWJGL3_NATIVES_VERSION: lwjgl3_natives_version,
+        SDL3_VERSION         : sdl3_version,
+        OPENAL_VERSION       : openal_version,
+        TINY_REMAPPER        : loader_tiny_remapper_version,
+        SAT4J                : loader_sat4j_version,
+        INTERMEDIARY         : intermediary,
+        MINECRAFT_CLIENT_URL : minecraft_client_url,
+        MINECRAFT_CLIENT_SHA1: minecraft_client_sha1,
+        MINECRAFT_CLIENT_SIZE: minecraft_client_size,
+        LOADER_LIBRARIES     : (["net.fabricmc:fabric-loader:${fabric_loader_version}", "net.fabricmc:sponge-mixin:${mixin_version}"] +
+                ['asm', 'asm-analysis', 'asm-commons', 'asm-tree', 'asm-util'].collect { "org.ow2.asm:${it}:${asm_version}" })
+                .collect { "        {\"name\": \"${it}\", \"MMC-hint\": \"local\"}" }.join(',\n'),
+    ]).collectEntries { k, v -> [k, v.toString()] }
+}
+ext.releaseFilter = { Map ed ->
+    def tokens = releaseTokens(ed)
+    return { String line ->
+        line.replaceAll(/@([A-Z0-9_]+)@/) { all, name ->
+            if (!tokens.containsKey(name)) throw new GradleException("unknown token @${name}@")
+            tokens[name]
+        }
     }
 }
-def crlf = { spec -> spec.filter(org.apache.tools.ant.filters.FixCrLfFilter, eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('crlf')) }
+ext.releaseCrlf = { spec -> spec.filter(org.apache.tools.ant.filters.FixCrLfFilter, eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('crlf')) }
 
-def modProjects = ['oldfaithful-hardening', 'oldfaithful-saves', 'oldfaithful-speed', 'oldfaithful-display']
-def serverMods = ['oldfaithful-hardening', 'oldfaithful-saves']
 // Looked up when a task is configured: the subprojects are evaluated after this script.
 def componentJar = { project(':oldfaithful-lwjgl').tasks.named('bakeLwjgl').flatMap { it.output } }
+def modJars = { List<String> mods -> mods.collect { project(":${it}").tasks.named('remapJar') } }
 def jarOf = { Configuration conf, String module -> conf.filter { it.name.startsWith(module + '-') } }
+def sha256 = { File f -> MessageDigest.getInstance('SHA-256').digest(f.bytes).encodeHex().toString() }
 
-// THIRD-PARTY-NOTICES.txt for the pack and for the server package, from the parts in release/notices.
+// THIRD-PARTY-NOTICES.txt for each edition's pack and server package: its own header, then the parts in
+// release/notices.
 def notices = tasks.register('releaseNotices') {
-    description = 'Assembles the notices files of the pack and the server package from release/notices.'
+    description = 'Assembles the notices files of the packs and the server packages from release/notices.'
     def parts = layout.projectDirectory.dir('release/notices')
     def out = staging.map { it.dir('notices') }
+    def eds = releaseEditions
     inputs.dir(parts)
-    inputs.property('tokens', releaseTokens.findAll { it.key != 'LOADER_LIBRARIES' })
+    eds.each { key, ed -> inputs.files(ed.packHeader, ed.serverHeader) }
+    inputs.property('tokens', eds.collectEntries { key, ed -> [key, releaseTokens(ed).findAll { it.key != 'LOADER_LIBRARIES' }] })
     outputs.dir(out)
     doLast {
-        def dir = parts.asFile
-        def write = { String name, List<String> files ->
-            def text = files.collect { new File(dir, it).getText('UTF-8').trim() }.join('\n\n') + '\n'
-            def target = out.get().file("${name}/THIRD-PARTY-NOTICES.txt").asFile
-            target.parentFile.mkdirs()
-            target.setText(text.readLines().collect(filterTokens).join('\r\n') + '\r\n', 'UTF-8')
+        def common = ['10-fabric-loader.txt', '11-mixin.txt', '12-asm.txt', '13-intermediary.txt'].collect { new File(parts.asFile, it) }
+        def component = ['20-lwjgl-component.txt', '21-natives.txt'].collect { new File(parts.asFile, it) }
+        eds.each { key, ed ->
+            def filter = releaseFilter(ed)
+            def write = { String name, List<File> files ->
+                def text = files.collect { it.getText('UTF-8').trim() }.join('\n\n') + '\n'
+                def target = out.get().file("${key}/${name}/THIRD-PARTY-NOTICES.txt").asFile
+                target.parentFile.mkdirs()
+                target.setText(text.readLines().collect(filter).join('\r\n') + '\r\n', 'UTF-8')
+            }
+            write('notices-pack', [file(ed.packHeader)] + common + component)
+            write('notices-server', [file(ed.serverHeader)] + common)
         }
-        def common = ['10-fabric-loader.txt', '11-mixin.txt', '12-asm.txt', '13-intermediary.txt']
-        write('notices-pack', ['00-header-pack.txt'] + common + ['20-lwjgl-component.txt', '21-natives.txt'])
-        write('notices-server', ['00-header-server.txt'] + common)
     }
 }
 
 // licenses/ (our licence, the texts the notices point to, each shipped jar's own licence files) and
 // THIRD-PARTY-NOTICES.txt. Paths are rewritten by replacing a segment, so the specs also work inside a folder.
-ext.licencesSpec = { boolean pack ->
+ext.licencesSpec = { boolean pack, Map ed = releaseEditions.pure ->
+    def key = releaseEditions.find { it.value.is(ed) }.key
     copySpec {
         includeEmptyDirs = false
         into('licenses') {
-            from('LICENSE') { into 'pure-faithful'; rename { 'LICENSE.txt' } }
+            from('LICENSE') { into ed.licenceFolder; rename { 'LICENSE.txt' } }
             from('release/licenses') { into 'common' }
             from({ zipTree(jarOf(configurations.loaderLibraries, 'fabric-loader').singleFile) }) {
                 include 'LICENSE_fabric-loader', 'net/fabricmc/loader/impl/lib/sat4j/about-sat4j.html'
@@ -129,14 +185,14 @@ ext.licencesSpec = { boolean pack ->
         }
         def kind = pack ? 'notices-pack' : 'notices-server'
         from(notices) {
-            include "${kind}/**"
-            eachFile { it.path = it.path.replace("${kind}/", '') }
+            include "${key}/${kind}/**"
+            eachFile { it.path = it.path.replace("${key}/${kind}/", '') }
         }
     }
 }
 
 // sources/: what the LGPL and EPL parts ask for, with a README saying what each is.
-ext.sourcesSpec = { boolean pack ->
+ext.sourcesSpec = { boolean pack, Map ed = releaseEditions.pure ->
     copySpec {
         into('sources') {
             from(configurations.releaseSources.filter { pack || !it.name.startsWith('openal-soft') })
@@ -144,8 +200,8 @@ ext.sourcesSpec = { boolean pack ->
             if (pack) from('natives/build.py') { rename { 'build-natives.py' } }
             from(pack ? 'release/sources-README-pack.txt' : 'release/sources-README-server.txt') {
                 rename { 'README.txt' }
-                filter filterTokens
-                crlf(delegate)
+                filter releaseFilter(ed)
+                releaseCrlf(delegate)
             }
         }
     }
@@ -153,34 +209,85 @@ ext.sourcesSpec = { boolean pack ->
 
 // The pack: the Prism instance a player imports. Everything but Minecraft (Mojang's, fetched by Prism) is inside,
 // with Prism's "local" hint, so nothing else is downloaded and nothing depends on our hosting.
-def pack = tasks.register('releasePack', Zip) {
-    group = 'oldfaithful'
-    description = 'Builds the Purist pack: the Prism instance players import (local/release/<version>/).'
-    inputs.property('tokens', releaseTokens)
-    from('prism/release') {
-        // Only the template: other work (icon candidates) may sit beside it.
-        include 'instance.cfg', 'mmc-pack.json', 'patches/*.json'
-        filesMatching(['mmc-pack.json', 'patches/*.json', 'instance.cfg']) { filter filterTokens }
+def packTask = { String taskName, Map ed ->
+    tasks.register(taskName, Zip) {
+        group = 'oldfaithful'
+        description = "Builds the ${ed.name} pack: the Prism instance players import."
+        inputs.property('tokens', releaseTokens(ed))
+        def tokensFilter = releaseFilter(ed)
+        from('prism/release') {
+            // Only the template: other work (icon candidates) may sit beside it.
+            include 'instance.cfg', 'mmc-pack.json', 'patches/*.json'
+            filesMatching(['mmc-pack.json', 'patches/*.json', 'instance.cfg']) { filter tokensFilter }
+        }
+        // The icon (the β seal, drawn by tools/icon_candidates.py), named for instance.cfg's iconKey.
+        from("prism/release/icons/final/${ed.icon}-128.png") { rename { "${ed.icon}.png" } }
+        from('prism/dev/patches') {
+            include 'net.fabricmc.fabric-loader.json', 'net.fabricmc.intermediary.json'
+            into 'patches'
+            filter tokensFilter
+        }
+        from(ed.packReadme) { rename { 'README.txt' }; filter tokensFilter; releaseCrlf(delegate) }
+        from(oldfaithfulMinecraft.intermediaryMappings) { into 'libraries' }
+        from(configurations.loaderLibraries) { into 'libraries' }
+        from(configurations.releaseNatives) { into 'libraries' }
+        from(componentJar()) { into 'libraries' }
+        modJars(ed.mods).each { from(it) { into '.minecraft/mods' } }
+        with licencesSpec(true, ed)
+        with sourcesSpec(true, ed)
+        includeEmptyDirs = false
+        duplicatesStrategy = DuplicatesStrategy.FAIL
+        destinationDirectory = staging.map { it.dir("out-${ed.icon}") }
+        archiveFileName = "${ed.fileName}-${ed.version}.zip"
     }
-    // The icon (the β seal, drawn by tools/icon_candidates.py), named for instance.cfg's iconKey.
-    from('prism/release/icons/final/purefaithful-128.png') { rename { 'purefaithful.png' } }
-    from('prism/dev/patches') {
-        include 'net.fabricmc.fabric-loader.json', 'net.fabricmc.intermediary.json'
-        into 'patches'
-        filter filterTokens
-    }
-    from('release/pack-README.txt') { rename { 'README.txt' }; filter filterTokens; crlf(delegate) }
-    from(oldfaithfulMinecraft.intermediaryMappings) { into 'libraries' }
-    from(configurations.loaderLibraries) { into 'libraries' }
-    from(configurations.releaseNatives) { into 'libraries' }
-    from(componentJar()) { into 'libraries' }
-    modProjects.each { m -> from(project(":${m}").tasks.named('remapJar')) { into '.minecraft/mods' } }
-    with licencesSpec(true)
-    with sourcesSpec(true)
-    includeEmptyDirs = false
-    destinationDirectory = staging.map { it.dir('out') }
-    archiveFileName = "${release_file_name}-${releaseVersion}.zip"
 }
+
+def serverTask = { String taskName, Map ed ->
+    tasks.register(taskName, Zip) {
+        group = 'oldfaithful'
+        description = "Zips the ${ed.name} server package for the release."
+        inputs.property('tokens', releaseTokens(ed))
+        into("${ed.fileName}-server") { serverPackageContents(it, ed) }
+        includeEmptyDirs = false
+        destinationDirectory = staging.map { it.dir("out-${ed.icon}") }
+        archiveFileName = "${ed.fileName}-server-${ed.version}.zip"
+    }
+}
+
+// SHA256SUMS.txt over a release folder, for the release notes.
+def writeSums = { File dir, String what ->
+    def lines = dir.listFiles().findAll { it.isFile() && it.name != 'SHA256SUMS.txt' }.sort { it.name }.collect {
+        "${sha256(it)}  ${it.name}"
+    }
+    new File(dir, 'SHA256SUMS.txt').setText(lines.join('\n') + '\n', 'UTF-8')
+    logger.lifecycle("${what}: ${dir}")
+    lines.each { logger.lifecycle("  ${it}") }
+}
+
+// A release folder is the record of what was published (and what releaseFixedPureCheck compares against), so a
+// build never silently changes one: if the folder already has a SHA256SUMS.txt and this build's files differ from it
+// (a changed, added or removed file), it stops, unless -Prelease.overwrite says the folder is an unpublished build to
+// replace. Run in doFirst, before Sync deletes or copies anything; the release tasks copy their files unrenamed.
+def guardRelease = { Sync sync, String edition, String version, String versionProperty ->
+    sync.doFirst {
+        def sumsFile = new File(sync.destinationDir, 'SHA256SUMS.txt')
+        if (!sumsFile.isFile() || project.hasProperty('release.overwrite')) return
+        def existing = sumsFile.readLines().findAll { it.trim() }.collectEntries { def p = it.split(/\s+/, 2); [p[1], p[0]] }
+        def coming = sync.source.files.collectEntries { [it.name, sha256(it)] }
+        def changed = (existing.keySet() + coming.keySet()).findAll { existing[it] != coming[it] }.sort()
+        if (!changed) return
+        def dir = project.relativePath(sync.destinationDir).replace(File.separator, '/')
+        throw new GradleException("${dir}/ already holds a build of ${edition} ${version}, and this one would change it " +
+                "(${changed.join(', ')}). A released version's files never change: give the new release a new version " +
+                "(${versionProperty} in gradle.properties, docs/release.md > Versions). If that folder is an unpublished " +
+                "build you mean to replace, run with -Prelease.overwrite.")
+    }
+}
+
+// Pure Faithful ---------------------------------------------------------------------------------------------------
+
+def pack = packTask('releasePack', releaseEditions.pure)
+def serverZip = serverTask('releaseServer', releaseEditions.pure)
 
 // For existing instances: org.lwjgl.json, the component with each library's download URL (this release's assets on
 // GitHub), SHA-1 and size, which Prism checks; the libraries themselves under asset names without '+', which GitHub
@@ -204,8 +311,8 @@ def component = tasks.register('releaseComponent') {
             target.bytes = f.bytes
             [url: downloadBase + assetName, sha1: sha1(f), size: f.length()]
         }
-        def libraries = [[name: "org.studioquire.purefaithful:purefaithful-lwjgl:${releaseVersion}",
-                          downloads: [artifact: asset(componentJar().get().asFile, "purefaithful-lwjgl-${releaseVersion}.jar")]]]
+        def libraries = [[name: "org.studioquire.purefaithful:purefaithful-lwjgl:${pureVersion}",
+                          downloads: [artifact: asset(componentJar().get().asFile, componentAssetName)]]]
         [[module: 'lwjgl3', version: lwjgl3_natives_version, classifier: 'natives-windows'],
          [module: 'sdl3', version: sdl3_version, classifier: 'natives-windows'],
          [module: 'openal-soft', version: openal_version, classifier: 'natives-windows-lwjgl3']].each { n ->
@@ -224,40 +331,78 @@ def component = tasks.register('releaseComponent') {
     }
 }
 
-def serverZip = tasks.register('releaseServer', Zip) {
-    group = 'oldfaithful'
-    description = 'Zips the server package for the release.'
-    inputs.property('serverSha1', minecraft_server_sha1)
-    into("${release_file_name}-server") { serverPackageContents(it) }
-    includeEmptyDirs = false
-    destinationDirectory = staging.map { it.dir('out') }
-    archiveFileName = "${release_file_name}-server-${releaseVersion}.zip"
-}
-
 def sourcesZip = tasks.register('releaseSourcesZip', Zip) {
     description = 'The third-party sources on their own, for the release page beside the standalone component.'
     with sourcesSpec(true)
-    destinationDirectory = staging.map { it.dir('out') }
-    archiveFileName = "${release_file_name}-${releaseVersion}-third-party-sources.zip"
+    destinationDirectory = staging.map { it.dir('out-purefaithful') }
+    archiveFileName = "${release_file_name}-${pureVersion}-third-party-sources.zip"
 }
 
 tasks.register('release', Sync) {
     group = 'oldfaithful'
-    description = 'Builds everything for a release into local/release/<version>/, with SHA256SUMS.txt. Publishes nothing.'
+    description = 'Builds Pure Faithful\'s release into local/release/<version>/, with SHA256SUMS.txt. Publishes nothing.'
     from(pack)
     from(serverZip)
     from(sourcesZip)
     from(component)
-    modProjects.each { m -> from(project(":${m}").tasks.named('remapJar')) }
-    into layout.projectDirectory.dir("local/release/${releaseVersion}")
+    modJars(pureMods).each { from(it) }
+    into layout.projectDirectory.dir(releaseEditions.pure.out)
     preserve { include 'SHA256SUMS.txt' }
-    doLast {
-        def dir = destinationDir
-        def lines = dir.listFiles().findAll { it.isFile() && it.name != 'SHA256SUMS.txt' }.sort { it.name }.collect {
-            "${MessageDigest.getInstance('SHA-256').digest(it.bytes).encodeHex()}  ${it.name}"
+    guardRelease(it, 'Pure Faithful', pureVersion, 'oldfaithful_version')
+    doLast { writeSums(destinationDir, "Release ${pureVersion}") }
+}
+
+// Old Faithful ----------------------------------------------------------------------------------------------------
+
+if (hasFixed) {
+    def fixed = releaseEditions.fixed
+    def packFixed = packTask('releasePackFixed', fixed)
+    def serverFixed = serverTask('releaseServerFixed', fixed)
+
+    // Old Faithful carries Pure Faithful's mods and component as a Pure Faithful release has them (docs/release.md >
+    // Versions): checked against that release's SHA256SUMS.txt in local/release/<version>/ when it's there. A build
+    // for testing only (-Prelease.test, into local/release/old-faithful-<version>-test/) may carry unreleased Pure
+    // Faithful changes, with a warning.
+    def pureCheck = tasks.register('releaseFixedPureCheck') {
+        description = 'Checks that Old Faithful\'s Pure Faithful parts are those of the Pure Faithful release they name.'
+        def jars = modJars(pureMods)
+        def sums = file("${releaseEditions.pure.out}/SHA256SUMS.txt")
+        def testBuild = project.hasProperty('release.test')
+        dependsOn jars, componentJar()
+        outputs.upToDateWhen { false }
+        doLast {
+            if (!sums.isFile()) {
+                logger.lifecycle("Pure Faithful ${pureVersion} isn't in local/release yet: build it with `./gw release` from this " +
+                        "commit and publish it with this Old Faithful (docs/release.md > Versions).")
+                return
+            }
+            def released = sums.readLines().findAll { it.trim() }.collectEntries { def p = it.split(/\s+/, 2); [p[1], p[0]] }
+            def ours = jars.collectEntries { def f = it.get().output.get().asFile; [f.name, f] }
+            ours[componentAssetName] = componentJar().get().asFile
+            def differ = ours.findAll { name, f -> released[name] != sha256(f) }.keySet()
+            if (differ) {
+                def what = "Pure Faithful's parts differ from its ${pureVersion} release (${differ.join(', ')}): Old Faithful " +
+                        "must ship on a released Pure Faithful, so release a new Pure Faithful version with it (docs/release.md > Versions)."
+                if (!testBuild) throw new GradleException(what + " For a test build, -Prelease.test.")
+                logger.warn("TEST BUILD, not for publishing: " + what)
+            } else {
+                logger.lifecycle("Pure Faithful's parts are its ${pureVersion} release's, byte for byte.")
+            }
         }
-        new File(dir, 'SHA256SUMS.txt').setText(lines.join('\n') + '\n', 'UTF-8')
-        logger.lifecycle("Release ${releaseVersion}: ${dir}")
-        lines.each { logger.lifecycle("  ${it}") }
+    }
+
+    tasks.register('releaseFixed', Sync) {
+        group = 'oldfaithful'
+        description = 'Builds Old Faithful\'s release into local/release/old-faithful-<version>/, with SHA256SUMS.txt. Publishes nothing.'
+        dependsOn pureCheck
+        from(packFixed)
+        from(serverFixed)
+        modJars(fixedMods).each { from(it) }
+        // A test build goes beside the real one, so the release folder only ever holds a checked build.
+        into layout.projectDirectory.dir(fixed.out + (project.hasProperty('release.test') ? '-test' : ''))
+        preserve { include 'SHA256SUMS.txt' }
+        // A test build's folder is for replacing.
+        if (!project.hasProperty('release.test')) guardRelease(it, 'Old Faithful', fixed.version, 'fixed_edition_version')
+        doLast { writeSums(destinationDir, "Old Faithful ${fixed.version}") }
     }
 }

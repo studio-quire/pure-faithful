@@ -31,6 +31,14 @@ final class RawClient implements AutoCloseable {
 	private double[] position; // x, feet y, eye y, z, as last set by the server
 	private float yaw, pitch;
 	private final List<String> chat = new ArrayList<>();
+	private final List<Received> received = new ArrayList<>();
+
+	/**
+	 * A packet the server sent that a test may ask about: player spawns (20: entity id, name), entity destroys (29: id),
+	 * chunk data (51: block x, z; d 1 if a whole chunk), block changes (53: x, y, z, block), sign texts (130: x, y, z, the lines), respawns (9).
+	 */
+	record Received(long at, int id, int a, int b, int c, int d, String text) {
+	}
 
 	RawClient(int port, String name) throws IOException {
 		this.name = name;
@@ -221,6 +229,72 @@ final class RawClient implements AutoCloseable {
 		}
 	}
 
+	private void note(int id, int a, int b, int c, int d, String text) {
+		synchronized (lock) {
+			received.add(new Received(System.nanoTime(), id, a, b, c, d, text));
+			lock.notifyAll();
+		}
+	}
+
+	/** What the server has sent so far of the packets {@link Received} lists. */
+	List<Received> received() {
+		synchronized (lock) {
+			return new ArrayList<>(received);
+		}
+	}
+
+	/** Waits up to {@code timeoutSeconds} for a received packet matching {@code test}; null if none came. */
+	Received await(java.util.function.Predicate<Received> test, double timeoutSeconds) throws InterruptedException {
+		long deadline = System.nanoTime() + (long) (timeoutSeconds * 1e9);
+		synchronized (lock) {
+			while (true) {
+				for (Received r : received) if (test.test(r)) return r;
+				long left = deadline - System.nanoTime();
+				if (left <= 0 || closed || kickReason != null) return null;
+				lock.wait(Math.max(1, TimeUnit.NANOSECONDS.toMillis(left)));
+			}
+		}
+	}
+
+	/** The entity id the server gave the player named {@code name}, as seen by this client; -1 if not seen. */
+	int playerEntity(String name) {
+		synchronized (lock) {
+			for (Received r : received) if (r.id() == 20 && r.text().equals(name)) return r.a();
+			return -1;
+		}
+	}
+
+	/** Packet 14: start (0) or finish (2) mining a block. */
+	void playerAction(int action, int x, int y, int z, int face) throws IOException {
+		synchronized (out) {
+			out.write(14);
+			out.write(action);
+			out.writeInt(x);
+			out.write(y);
+			out.writeInt(z);
+			out.write(face);
+			out.flush();
+		}
+	}
+
+	/** Packet 9, as the death screen's Respawn button sends it. */
+	void respawn() throws IOException {
+		synchronized (out) {
+			out.write(9);
+			out.writeByte(0);
+			out.flush();
+		}
+	}
+
+	/** Sends the last position the server set back {@code times} times, {@code intervalMillis} apart (chunks flow). */
+	void stand(int times, long intervalMillis) throws IOException, InterruptedException {
+		for (int i = 0; i < times && !isClosed(); i++) {
+			double[] p = position();
+			move(p[0], p[1], p[2], p[3], yaw, pitch, false);
+			Thread.sleep(intervalMillis);
+		}
+	}
+
 	private void readLoop() {
 		try {
 			while (true) {
@@ -255,7 +329,7 @@ final class RawClient implements AutoCloseable {
 			case 5: in.readInt(); in.readShort(); in.readShort(); in.readShort(); break;
 			case 6: skip(12); break;
 			case 8: in.readShort(); break;
-			case 9: in.readByte(); break;
+			case 9: in.readByte(); note(9, 0, 0, 0, 0, null); break;
 			case 10: in.readByte(); break;
 			case 11: skip(33); break;
 			case 12: skip(9); break;
@@ -276,7 +350,13 @@ final class RawClient implements AutoCloseable {
 			}
 			case 17: in.readInt(); in.readByte(); in.readInt(); in.readByte(); in.readInt(); break;
 			case 18: in.readInt(); in.readByte(); break;
-			case 20: in.readInt(); readString(in); skip(12 + 2 + 2); break;
+			case 20: {
+				int entity = in.readInt();
+				String player = readString(in);
+				skip(12 + 2 + 2);
+				note(20, entity, 0, 0, 0, player);
+				break;
+			}
 			case 21: in.readInt(); in.readShort(); in.readByte(); in.readShort(); skip(12 + 3); break;
 			case 22: skip(8); break;
 			case 23: {
@@ -287,7 +367,8 @@ final class RawClient implements AutoCloseable {
 			case 24: in.readInt(); in.readByte(); skip(12 + 2); skipTracked(); break;
 			case 25: in.readInt(); readString(in); skip(16); break;
 			case 28: skip(4 + 6); break;
-			case 29: case 30: skip(4); break;
+			case 29: note(29, in.readInt(), 0, 0, 0, null); break;
+			case 30: skip(4); break;
 			case 31: skip(4 + 3); break;
 			case 32: skip(4 + 2); break;
 			case 33: skip(4 + 5); break;
@@ -295,15 +376,30 @@ final class RawClient implements AutoCloseable {
 			case 38: skip(5); break;
 			case 39: skip(8); break;
 			case 40: in.readInt(); skipTracked(); break;
-			case 50: skip(9); break;
-			case 51: skip(4 + 2 + 4 + 3); skip(in.readInt()); break;
-			case 52: {
-				skip(8);
-				int n = in.readShort() & 0xffff;
-				skip(n * 4L);
+			case 50: { int x = in.readInt(), z = in.readInt(); note(50, x, z, in.readByte(), 0, null); break; }
+			case 51: {
+				int x = in.readInt();
+				in.readShort();
+				int z = in.readInt();
+				int sx = in.readUnsignedByte(), sy = in.readUnsignedByte(), sz = in.readUnsignedByte();
+				skip(in.readInt());
+				// d: 1 for a whole chunk (16 x 128 x 16), 0 for a region of changed blocks
+				note(51, x, z, 0, sx == 15 && sy == 127 && sz == 15 ? 1 : 0, null);
 				break;
 			}
-			case 53: skip(4 + 1 + 4 + 1 + 1); break;
+			case 52: {
+				int cx = in.readInt(), cz = in.readInt();
+				int n = in.readShort() & 0xffff;
+				skip(n * 4L);
+				note(52, cx, cz, n, 0, null);
+				break;
+			}
+			case 53: {
+				int x = in.readInt(), y = in.readByte(), z = in.readInt(), block = in.readByte() & 0xFF;
+				in.readByte();
+				note(53, x, y, z, block, null);
+				break;
+			}
 			case 54: skip(4 + 2 + 4 + 2); break;
 			case 60: {
 				skip(24 + 4);
@@ -325,7 +421,13 @@ final class RawClient implements AutoCloseable {
 			}
 			case 105: skip(5); break;
 			case 106: skip(4); break;
-			case 130: skip(10); for (int i = 0; i < 4; i++) readString(in); break;
+			case 130: {
+				int x = in.readInt(), y = in.readShort(), z = in.readInt();
+				StringBuilder lines = new StringBuilder();
+				for (int i = 0; i < 4; i++) lines.append(i == 0 ? "" : "|").append(readString(in));
+				note(130, x, y, z, 0, lines.toString());
+				break;
+			}
 			case 131: skip(4); skip(in.readUnsignedByte()); break;
 			case 200: skip(5); break;
 			case 255: {

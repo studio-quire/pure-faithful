@@ -1,5 +1,6 @@
 package org.studioquire.oldfaithful.selftest;
 
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.SingleplayerInteractionManager;
 import net.minecraft.client.gui.screen.MultiplayerScreen;
@@ -14,6 +15,7 @@ import org.lwjgl.sdl.SDLVideo;
 import org.lwjgl.sdl.SDLKeycode;
 import org.lwjgl.sdl.SDLTimer;
 import org.lwjgl.sdl.SDL_Event;
+import org.studioquire.oldfaithful.hardening.Branding;
 import org.studioquire.oldfaithful.lwjgl.Settings;
 import org.studioquire.oldfaithful.lwjgl.Window;
 import org.studioquire.oldfaithful.selftest.mixin.MultiplayerScreenAccessor;
@@ -38,6 +40,8 @@ public final class StartupCheck {
 	/** A first start of Old Faithful (no options.txt yet): checked at the title screen, which it then quits by its button. */
 	private static final boolean FIRST_START = Boolean.getBoolean("oldfaithful.selftest.firstStart");
 	private static final String REARRANGE = System.getProperty("oldfaithful.selftest.rearrange");
+	/** host:port of a test server to join instead of making a world (MultiplayerCheck). */
+	private static final String JOIN = System.getProperty("oldfaithful.selftest.joinServer");
 	private static final long STALL_MS = 150_000;
 
 	private static final SelfTest results = new SelfTest();
@@ -46,6 +50,9 @@ public final class StartupCheck {
 	private static int worldTicks;
 	private static FixesCheck fixes;
 	private static OptionsCheck options;
+	private static SettingsCheck settings;
+	private static MultiplayerCheck multiplayer;
+	private static SceneShot scene;
 	private static long startedAt;
 	private static String clipboard;
 	/** Rows of beta's version-line grey in the title screen's corner, counted as separate lines; -1 until drawn. */
@@ -95,13 +102,23 @@ public final class StartupCheck {
 		}
 	}
 
+	/** The line says which edition this is: Old Faithful's name and version where its fix mod is, else Pure Faithful's. */
+	private static void titleLineCheck() {
+		FabricLoader loader = FabricLoader.getInstance();
+		String expected = loader.getModContainer("oldfaithful-fixes")
+				.map(m -> "Old Faithful " + m.getMetadata().getVersion().getFriendlyString())
+				.orElseGet(() -> "Pure Faithful " + loader.getModContainer("purefaithful-hardening").get().getMetadata().getVersion().getFriendlyString());
+		results.check("the title line reads \"" + Branding.TEXT + "\" (expected \"" + expected + "\")", expected.equals(Branding.TEXT));
+	}
+
 	private static void step(Minecraft mc) throws Exception {
 		switch (phase) {
 			case 0:
 				if (!(mc.currentScreen instanceof TitleScreen) || titleLines < 0) return;
 				results.pass("main menu reached");
-				results.check("title screen: \"Minecraft Beta 1.7.3\" and Pure Faithful's line under it, in beta's grey (" + titleLines
+				results.check("title screen: \"Minecraft Beta 1.7.3\" and the edition's line under it, in beta's grey (" + titleLines
 						+ " lines; title-corner.png in the run folder)", titleLines == 2);
+				titleLineCheck();
 				results.check("window title is \"Minecraft\", as on LWJGL 2: \"" + Display.getTitle() + "\"", "Minecraft".equals(Display.getTitle()));
 				results.check("window created and never shown, never active", Display.isCreated() && !Display.isVisible() && !Display.isActive());
 				results.check("mouse: system pointer speed and acceleration (the display mod's default)", !Settings.rawMouse
@@ -114,6 +131,12 @@ public final class StartupCheck {
 				System.out.println("[oldfaithful-selftest] GL: " + GL11.glGetString(GL11.GL_VERSION) + " / " + GL11.glGetString(GL11.GL_RENDERER));
 				if (REARRANGE != null) {
 					phase = 10;
+				} else if (JOIN != null) {
+					// `:harness:fixesMultiplayerTest`: the multiplayer fixes, on a test server.
+					String[] hostPort = JOIN.split(":");
+					mc.setScreen(new net.minecraft.client.gui.screen.ConnectScreen(mc, hostPort[0], Integer.parseInt(hostPort[1])));
+					multiplayer = new MultiplayerCheck(results);
+					phase = 20;
 				} else if (MENU_ONLY) {
 					finish(mc);
 				} else {
@@ -148,7 +171,7 @@ public final class StartupCheck {
 				results.pass("back at the main menu");
 				// As the Create World screen does.
 				mc.interactionManager = new SingleplayerInteractionManager(mc);
-				mc.startGame(WORLD, "Old Faithful start-up test", 7373L);
+				mc.startGame(WORLD, "Old Faithful start-up test", SceneShot.ENABLED ? SceneShot.SEED : 7373L);
 				mc.setScreen(null);
 				phase = 4;
 				return;
@@ -158,6 +181,12 @@ public final class StartupCheck {
 				results.check("world created, loaded and running: player at y " + Math.round(mc.player.y) + ", world time " + mc.world.getTime()
 						+ " after " + worldTicks + " game ticks", mc.world.getTime() >= WORLD_TICKS / 2 && mc.currentScreen == null);
 				results.check("sound system initialised (paulscode on our OpenAL)", paulscode.sound.SoundSystem.initialized());
+				if (SceneShot.ENABLED) {
+					// `:harness:sceneShot`: pictures of the world instead of the checks in it.
+					scene = new SceneShot(results);
+					phase = 30;
+					return;
+				}
 				if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("oldfaithful-fixes")) {
 					fixes = new FixesCheck(results);
 					fixes.start(mc);
@@ -172,7 +201,17 @@ public final class StartupCheck {
 				return;
 			case 6:
 				// Old Faithful's options mod in the running world.
-				if (options.tick(mc)) finish(mc);
+				if (options.tick(mc)) settingsOrFinish(mc);
+				return;
+			case 7:
+				// Old Faithful's settings screen.
+				if (settings.tick(mc)) finish(mc);
+				return;
+			case 20:
+				if (multiplayer.tick(mc)) finish(mc);
+				return;
+			case 30:
+				if (scene.tick(mc)) finish(mc);
 				return;
 			case 10: {
 				// As a player would: out of maximised, then resized and moved. The display mod sees it through the
@@ -306,6 +345,16 @@ public final class StartupCheck {
 		options = new OptionsCheck(results);
 		options.start(mc);
 		phase = 6;
+	}
+
+	private static void settingsOrFinish(Minecraft mc) {
+		if (!SettingsCheck.loaded()) {
+			finish(mc);
+			return;
+		}
+		settings = new SettingsCheck(results);
+		settings.start(mc);
+		phase = 7;
 	}
 
 	private static void finish(Minecraft mc) {

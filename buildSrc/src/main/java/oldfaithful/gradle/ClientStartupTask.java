@@ -208,7 +208,7 @@ public abstract class ClientStartupTask extends GameTestTask {
 	}
 
 	/** A game folder ready to run: the sounds (so nothing downloads), a quick view distance, sound into a file. */
-	private void prepare(Path game, boolean linux) throws IOException {
+	protected void prepare(Path game, boolean linux) throws IOException {
 		copySounds(game);
 		// Tiny render distance: a quick world load.
 		Files.writeString(game.resolve("options.txt"), "viewDistance:3\n");
@@ -218,7 +218,7 @@ public abstract class ClientStartupTask extends GameTestTask {
 	}
 
 	/** Runs the game unseen in {@code game} with the self-test, and checks it ran and stopped cleanly. */
-	private List<String> launch(Path game, boolean linux, List<String> extraJvmArgs, List<String> failures) throws Exception {
+	protected List<String> launch(Path game, boolean linux, List<String> extraJvmArgs, List<String> failures) throws Exception {
 		String natives = getNatives().get().getAsFile().getAbsolutePath();
 		List<String> jvm = new ArrayList<>(List.of("-Xmx1g", "-Doldfaithful.lwjgl.hidden=true", "-Doldfaithful.selftest.startup=true",
 				"-Djava.library.path=" + natives, "-Dorg.lwjgl.librarypath=" + natives, "--enable-native-access=ALL-UNNAMED"));

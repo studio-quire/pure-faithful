@@ -22,10 +22,16 @@
     "WorldRendererAccessor",
     "MinecraftPickInvoker",
     "RedstoneTorchInvoker",
-    "FishingBobberAccessor"
+    "FishingBobberAccessor",
+    "LivingEntityLerpAccessor",
+    "MinecraftMouseDriveMixin",
+    "ButtonWidgetAccessor",
+    "GameRendererScreenCaptureMixin",
+    "GameRendererSceneMixin"
   ],
   "server": [
-    "PlayerManagerRideMixin"
+    "PlayerManagerRideMixin",
+    "MultiplayerScenesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

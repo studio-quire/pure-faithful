@@ -1,5 +1,5 @@
 @echo off
-rem Pure Faithful server: Minecraft beta 1.7.3's server with Fabric Loader and our hardening and saves mods. See README.txt.
+rem @NAME@ server: Minecraft beta 1.7.3's server with Fabric Loader and our @SERVER_MODS@ mods. See README.txt.
 setlocal
 cd /d "%~dp0"
 set "JAR=minecraft_server.jar"

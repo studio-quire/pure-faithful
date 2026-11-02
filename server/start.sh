@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pure Faithful server: Minecraft beta 1.7.3's server with Fabric Loader and our hardening and saves mods. See README.txt.
+# @NAME@ server: Minecraft beta 1.7.3's server with Fabric Loader and our @SERVER_MODS@ mods. See README.txt.
 cd "$(dirname "$0")" || exit 1
 JAR=minecraft_server.jar
 SHA1=@SERVER_SHA1@

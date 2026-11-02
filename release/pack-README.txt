@@ -6,8 +6,8 @@ you launch it; everything else @NAME@ needs is already here. You need a Minecraf
 
 @NAME@ is beta 1.7.3 exactly as it was, with only the problems fixed that come from its age: it runs on today's
 computers and Java, it's safe to use online, it's faster without changing anything you see, and it can't lose your
-world. Beta's own bugs and quirks are left as they were. (Old Faithful, coming later, is @NAME@ plus fixes for
-those.)
+world. Beta's own bugs and quirks are left as they were. (Old Faithful is @NAME@ plus fixes for those:
+https://studioquire.org/old-faithful/)
 
 What's different from playing beta 1.7.3 as it came:
 - Its own window again, resizable and sharp on high-resolution screens; F11 for borderless fullscreen; Ctrl+V

@@ -309,6 +309,94 @@ if (!fixedMods.isEmpty()) {
         if (gameJava.isPresent()) javaExecutable = gameJava
     }
 }
+// Pictures of the real game for the site (SceneShot, docs/release.md): Old Faithful's mods, a 1440x900 hidden
+// window, lava lying in caves near the spawn of -PsceneSeed (default 7373), shots in local/run/scene-shot/shots/.
+if (!fixedMods.isEmpty()) {
+    tasks.register('sceneShot', oldfaithful.gradle.ClientStartupTask) {
+        group = 'oldfaithful'
+        description = 'Takes pictures of lit lava in caves of a new world, unseen, with Old Faithful\'s mods.'
+        dependsOn extractLwjgl3Natives
+        gameJar = mc.clientJar
+        intermediaryMappings = mc.intermediaryMappings
+        loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
+        mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods)
+        natives = lwjgl3NativesDir
+        soundsGameDir = rootProject.layout.projectDirectory.dir('local/cache/selftest-sounds')
+        privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
+        def runDirectory = rootProject.layout.projectDirectory.dir('local/run/scene-shot')
+        runDir = runDirectory
+        oldFaithful = findProject(':oldfaithful-options') != null
+        windowRuns = false
+        timeoutSeconds = 600
+        // Later -D values win: the window's size, and what the start-up checks expect of it.
+        extraJvmArgs = ['-Dorg.prismlauncher.window.dimensions=1440x900', '-Doldfaithful.selftest.expectSize=1440x900',
+                        "-Doldfaithful.selftest.scene=${runDirectory.dir('shots').asFile.absolutePath}",
+                        "-Doldfaithful.selftest.sceneSeed=${providers.gradleProperty('sceneSeed').getOrElse('7373')}"]
+        if (gameJava.isPresent()) javaExecutable = gameJava
+    }
+}
+// Old Faithful's multiplayer fixes in every mix of sides (docs/fixes.md): the server package with and without the fix
+// mod, each joined by the real client (hidden) with and without it, and raw-packet clients for the server-side ones.
+if (findProject(':oldfaithful-fixes') != null) {
+    def fixesJar = project(':oldfaithful-fixes').tasks.named('remapJar')
+    def clientMods = [testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod]
+    tasks.register('fixesMultiplayerTest', oldfaithful.gradle.FixesMultiplayerTestTask) {
+        group = 'verification'
+        description = 'The multiplayer fixes on the real server and the real client (hidden), with and without the fix mod on each side.'
+        dependsOn extractLwjgl3Natives, rootProject.tasks.named('serverPackage')
+        gameJar = mc.clientJar
+        intermediaryMappings = mc.intermediaryMappings
+        loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
+        mods.from(clientMods, fixesJar)
+        clientModsWithoutFixes.from(clientMods)
+        serverPackage = rootProject.layout.projectDirectory.dir('local/server-package/OldFaithful-server')
+        serverJar = mc.serverJar
+        harnessMod = tasks.named('remapJar').flatMap { it.output }
+        fixesMod = fixesJar.flatMap { it.output }
+        natives = lwjgl3NativesDir
+        soundsGameDir = rootProject.layout.projectDirectory.dir('local/cache/selftest-sounds')
+        privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
+        runDir = rootProject.layout.projectDirectory.dir('local/run/fixes-multiplayer-test')
+        windowRuns = false
+        rawOnly = providers.gradleProperty('fixesmp.rawOnly').map { it.toBoolean() }.orElse(false)
+        if (gameJava.isPresent()) javaExecutable = gameJava
+    }
+}
+// The release packs as they'll be published (docs/release.md): the start-up test on what's inside each pack's zip,
+// unpacked as Prism would lay it out: its libraries on the classpath, its natives extracted, its mods (with the
+// self-test mod beside them). `clientStartupTestPack` for Pure Faithful's, `clientStartupTestPackFixed` for Old
+// Faithful's. Prism itself and the instance files (components, icon, notes) aren't run here.
+[[task: 'clientStartupTestPack', pack: 'releasePack', key: 'pure', oldFaithful: false],
+ [task: 'clientStartupTestPackFixed', pack: 'releasePackFixed', key: 'fixed', oldFaithful: true]].each { p ->
+    if (!rootProject.tasks.names.contains(p.pack)) return
+    def packZip = rootProject.tasks.named(p.pack)
+    def unpacked = tasks.register("${p.task}Unpack", Sync) {
+        from { zipTree(packZip.get().archiveFile) }
+        into layout.buildDirectory.dir("pack-test/${p.key}/instance")
+    }
+    def packNatives = tasks.register("${p.task}Natives", Sync) {
+        dependsOn unpacked
+        from { fileTree(unpacked.get().destinationDir) { include 'libraries/*natives*.jar' }.collect { zipTree(it) } }
+        exclude 'META-INF/**'
+        into layout.buildDirectory.dir("pack-test/${p.key}/natives")
+    }
+    def libraries = unpacked.map { fileTree(it.destinationDir) { include 'libraries/*.jar'; exclude 'libraries/*natives*.jar', 'libraries/intermediary-*.jar' } }
+    tasks.register(p.task, oldfaithful.gradle.ClientStartupTask) {
+        group = 'verification'
+        description = "The start-up test on what's in the ${p.key == 'pure' ? 'Pure Faithful' : 'Old Faithful'} release pack."
+        dependsOn packNatives
+        gameJar = mc.clientJar
+        intermediaryMappings = layout.file(unpacked.map { fileTree(it.destinationDir) { include 'libraries/intermediary-*.jar' }.singleFile })
+        loaderClasspath.from(libraries)
+        mods.from(unpacked.map { fileTree(it.destinationDir) { include '.minecraft/mods/*.jar' } }, tasks.named('remapJar'))
+        natives = layout.buildDirectory.dir("pack-test/${p.key}/natives")
+        soundsGameDir = rootProject.layout.projectDirectory.dir('local/cache/selftest-sounds')
+        privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
+        runDir = rootProject.layout.projectDirectory.dir("local/run/client-startup-pack-${p.key}")
+        oldFaithful = p.oldFaithful
+        if (gameJava.isPresent()) javaExecutable = gameJava
+    }
+}
 // The same on Linux x64, in Docker (tools/in_linux.py): `clientStartupTestLinux` runs it on both test images.
 def clientStartupLinux = linuxImages.collect { img ->
     tasks.register("clientStartupTestLinux-${img}", oldfaithful.gradle.ClientStartupTask) {

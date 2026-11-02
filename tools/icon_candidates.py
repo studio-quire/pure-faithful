@@ -833,8 +833,9 @@ def main(argv=None):
     for size in (32, 64, 128, 256, 512):
         pure.resize((size, size), Image.NEAREST).save(final / f"purefaithful-{size}.png", optimize=True)
     pure.resize((128, 128), Image.NEAREST).save(final / "purefaithful.png", optimize=True)
-    # Old Faithful's, in the green the user picked (07-old-c, spring green): its own mods' icons for now.
-    old = c07_beta(beta_green(next(hue for key, hue, _ in BETA_GREENS if key == "c"))).image()
+    # Old Faithful's: the spring green the user picked (07-old-c) with a silver rim and β, s3 (the silvers looked alike
+    # to them at icon sizes; s3's green shadow is the one that differs, 2026-11-02).
+    old = silver_seal(*next((silver, shadow) for key, _, silver, shadow in SILVERS if key == "s3")).image()
     for size in (32, 64, 128, 256, 512):
         old.resize((size, size), Image.NEAREST).save(final / f"oldfaithful-{size}.png", optimize=True)
     current = next((p for p in (ROOT / "prism" / "release" / n for n in ("purefaithful.png", "oldfaithful.png"))

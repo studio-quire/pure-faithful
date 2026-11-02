@@ -29,7 +29,16 @@ public class ModPlugin implements Plugin<Project> {
 		Project root = project.getRootProject();
 		MinecraftFiles mc = root.getExtensions().getByType(MinecraftFiles.class);
 
-		project.setVersion(prop(project, "oldfaithful_version"));
+		// The Pure edition's mods are Pure Faithful's publicly (CLAUDE.md > Decisions): the jar, mod id, licence file and
+		// icon path carry that name; the project folders, packages and tasks keep the project's internal "oldfaithful".
+		// A mod of the Fixed edition only (`oldfaithful_edition=fixed` in its gradle.properties) is Old Faithful's, so
+		// its public name stays oldfaithful-*, with Old Faithful's icon, version and links (docs/release.md > Names).
+		boolean fixedEdition = "fixed".equals(project.findProperty("oldfaithful_edition"));
+		String publicName = fixedEdition ? "oldfaithful" : "purefaithful";
+		String modId = project.getName().replaceFirst("^oldfaithful-", publicName + "-");
+		String props = fixedEdition ? "fixed_" : "";
+
+		project.setVersion(prop(project, fixedEdition ? "fixed_edition_version" : "oldfaithful_version"));
 
 		DependencyHandler deps = project.getDependencies();
 		deps.add("compileOnly", project.files(mc.getNamedJar()));
@@ -58,18 +67,10 @@ public class ModPlugin implements Plugin<Project> {
 			t.setMaxParallelForks(1);
 		});
 
-		// The Pure edition's mods are Pure Faithful's publicly (CLAUDE.md > Decisions): the jar, mod id, licence file and
-		// icon path carry that name; the project folders, packages and tasks keep the project's internal "oldfaithful".
-		// A mod of the Fixed edition only (`oldfaithful_edition=fixed` in its gradle.properties) is Old Faithful's, so
-		// its public name stays oldfaithful-*, with Old Faithful's icon (docs/release.md > Names).
-		boolean fixedEdition = "fixed".equals(project.findProperty("oldfaithful_edition"));
-		String publicName = fixedEdition ? "oldfaithful" : "purefaithful";
-		String modId = project.getName().replaceFirst("^oldfaithful-", publicName + "-");
-
 		// fabric.mod.json gets the version and the public links; every jar carries our licence and the icon.
 		project.getTasks().named(main.getProcessResourcesTaskName(), ProcessResources.class, t -> {
 			Map<String, String> tokens = Map.of("version", project.getVersion().toString(),
-					"repo", prop(project, "release_repo"), "homepage", prop(project, "release_homepage"));
+					"repo", prop(project, props + "release_repo"), "homepage", prop(project, props + "release_homepage"));
 			t.getInputs().property("tokens", tokens);
 			t.filesMatching("fabric.mod.json", f -> f.expand(tokens));
 			t.from(root.file("LICENSE"), c -> c.rename(n -> "LICENSE_" + modId));

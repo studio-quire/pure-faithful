@@ -4,7 +4,7 @@ Claude Opus 5.5, 2026-11-02. Second pass, then the first fixes. Purist leaves al
 says it may be the user's call to take into Purist. Old Faithful (Fixed) is narrow (user, 2026-11-02): beta as it was
 meant to work, its clear mistakes fixed, and anything players built around left as beta (at most a setting that
 defaults to beta). What later versions changed, the **ask** entries, belongs to the polished edition, Still Faithful,
-not to Fixed. Fixed so far: twenty-two entries in `oldfaithful-fixes` (`docs/fixes.md`), each with its
+not to Fixed. Fixed so far: thirty entries in `oldfaithful-fixes` (`docs/fixes.md`), each with its
 own switch in `config/oldfaithful-fixes.properties`; lighting (#3) in `oldfaithful-lighting` (`docs/lighting.md`).
 
 Sources:
@@ -41,7 +41,7 @@ Key:
 | 2 | Chunk saves overwrite in place, and an oversized chunk is silently never saved | bug | Pure | high, rare | fixed |
 | 3 | Lighting errors: generated lava lights nothing; dark pockets under overhangs and at chunk edges | bug | OF | mid | fixed (OF) |
 | 4 | Farm animals despawn: pens empty while you're away (all but tamed wolves) | ask | SF | high | T |
-| 5 | Multiplayer ghost blocks: a break the server refuses for distance is corrected only 4 s later | bug | OF | low-mid (MP) | T |
+| 5 | Multiplayer ghost blocks: a break the server refuses for distance is corrected only 4 s later | bug | OF | low-mid (MP) | fixed (OF) |
 | 6 | Dusk and dawn: every step of daylight rebuilds the whole view (stutter, stepped darkening) | ask (speed, looks) | SF | mid-high | T |
 | 7 | Grey sky while an inventory or any container is open | bug | OF | mid | fixed (OF) |
 | 8 | Tools' last use: the block drops nothing (multiplayer: everything; single player: leaves cut with shears) | bug | OF | mid | fixed (OF) |
@@ -51,9 +51,9 @@ Key:
 | 12 | Boats break on bumping into things at speed | ask | SF | mid | T |
 | 13 | Stairs drop their material (wood stairs: a plank; cobblestone stairs: one cobblestone) | ask | SF | mid | T |
 | 14 | Autosave every 2 seconds on the game thread: a hitch every 40 ticks | ask (speed) | SF | mid | T |
-| 15 | Multiplayer mob jitter: the client runs its own physics on remote mobs, on top of the server's positions | bug | OF | mid (MP) | T |
-| 16a | Multiplayer: a player who teleports or comes through a portal stays invisible to players already there | bug | OF | mid (MP) | T |
-| 16b | Multiplayer: after a /tp or a fast move, chunks arrive row by row, not nearest first: seconds over air | bug (order), ask (holding still) | OF / SF | low-mid (MP) | T (order); lasting holes L |
+| 15 | Multiplayer mob jitter: the client runs its own physics on remote mobs, on top of the server's positions | bug | OF | mid (MP) | fixed (OF) |
+| 16a | Multiplayer: a player who teleports or comes through a portal stays invisible to players already there | bug | OF | mid (MP) | fixed (OF) |
+| 16b | Multiplayer: after a /tp or a fast move, chunks arrive row by row, not nearest first: seconds over air | bug (order), ask (holding still) | OF / SF | low-mid (MP) | order fixed (OF); lasting holes L |
 | 17 | Advanced OpenGL: chunks flicker out of view | bug | OF | mid | L |
 | 18 | Screenshots fail after the window is enlarged | bug | Pure | mid now | fixed |
 | 19 | Water flowing down destroys torches, rails and redstone without dropping them | bug | OF | low-mid | fixed (OF) |
@@ -72,7 +72,7 @@ Key:
 | 33 | Crash on a slab or dye item with a bad data value | bug | OF | low | fixed (OF) |
 | 34 | Small visual bugs (list in the entry) | bug, ask | OF / SF | low | fixed (OF): four; the rest T or L |
 | 35 | Eating at full health wastes the food | ask | SF | low | L |
-| 36 | Multiplayer mining delay: the 5-tick cooldown never resets; the next block waits for the click's repeat | bug (reset), ask (tempo) | OF / SF | low-mid (MP) | T |
+| 36 | Multiplayer mining delay: the 5-tick cooldown never resets; the next block waits for the click's repeat | bug (reset), ask (tempo) | OF / SF | low-mid (MP) | reset fixed (OF) |
 | 37 | Skeletons circle the player, hard to hit | quirk | none | low | L |
 | 38 | Footsteps saved up going down stairs, then played in a burst at the bottom | bug | OF | mid | fixed (OF) |
 | 39 | The item on the cursor draws behind the player model and the screen's labels | bug | OF | low-mid | fixed (OF) |
@@ -84,10 +84,10 @@ Key:
 | 45 | Shift-clicking a crafting result into a nearly full inventory loses what doesn't fit | bug | OF | low | fixed (OF) |
 | 46 | Pick block on redstone, repeaters, doors, signs, wheat, beds or cake selects nothing; on a mob, stone | bug | OF | low | fixed (OF) |
 | 47 | Double slabs always mesh their top face (a missing `return`) | speed | Pure | low | fixed |
-| 48 | Multiplayer: a sign edited in the same tick as another block change in its chunk shows blank to others | bug | OF | low-mid (MP) | T |
-| 49 | Multiplayer: after a respawn, entities near where you died can stay frozen on your screen | bug | OF | low-mid (MP) | T (code path) |
-| 50 | Multiplayer: other players turn in steps and can stay up to about 11 degrees off | bug (yaw), ask (threshold) | OF / SF | low (MP) | T |
-| 51 | Multiplayer: the server's vertical movement check can never fire (`\|\|` for `&&`) | ask (movement trust) | SF / phase 6 | low | T |
+| 48 | Multiplayer: a sign edited in the same tick as another block change in its chunk shows blank to others | bug | OF | low-mid (MP) | fixed (OF) |
+| 49 | Multiplayer: after a respawn, entities near where you died can stay frozen on your screen | bug | OF | low-mid (MP) | fixed (OF) |
+| 50 | Multiplayer: other players turn in steps and can stay up to about 11 degrees off | bug (yaw), ask (threshold) | OF / SF | low (MP) | yaw fixed (OF) |
+| 51 | Multiplayer: a server movement check (details kept private) | ask | none | low | T |
 | 52 | Server with `allow-nether=false`: every restart resets the world's time and weather, and a new world's spawn (level.dat overwritten by the unticked Nether's); with the Nether on, its spawn and weather still win, and a restart undoes sleep | bug | Pure / OF | mid (MP) | fixed (Nether off); T |
 
 #32 (video settings sliders can't be dragged) left the table: vanilla has no slider there (its entry).
@@ -156,7 +156,10 @@ only paces the work. What players see change: underground lava lakes and the Net
 surroundings (fewer hostile mobs spawn right beside them), and the rare dark pocket fills in. A first version queued its
 fixes behind vanilla's 500-a-frame queue, so in single player far lava stayed dark until the player came near (the
 user, 2026-11-02); now what a loading chunk needs is lit at once (`docs/lighting.md` > Distant lava stayed dark). The original "high,
-never heals" impact was the catalogue's guess; fresh worlds measured show mostly the lava, so "mid".
+never heals" impact was the catalogue's guess; fresh worlds measured show mostly the lava, so "mid". Generated lava's
+light has a switch, on by default (the user's call, 2026-11-02): `lava.lightGenerated` in
+`config/oldfaithful-lighting.properties`; off leaves it dark as beta did, every other fix staying on
+(`docs/lighting.md` > The switch).
 
 ### 4. Farm animals despawn (T, ask)
 `LivingEntity.tryDespawn`: any mob more than 32 blocks from the nearest player, once 600 ticks have passed since it was
@@ -173,6 +176,9 @@ from the player's position returns without a `BlockUpdateS2CPacket`, while the c
 (`MultiplayerInteractionManager`). The client then shows air where the server has a block (walk into it, fall
 through, get pushed back) for about 4 s, until it undoes the unconfirmed change (`ClientWorld`'s block resets, 80
 ticks). Fix: send the block update back whenever the server refuses. Risk: none. Fits phase 6 too.
+**Fixed (OF)**, `multiplayer.refusedBreaks` (server): a start or finish refused for distance is answered with the
+block, within 16 blocks (vanilla's own reach for answering an aborted break). Not a Pure matter: it costs a moment's
+hole on screen, no safety or world state.
 
 ### 6. Dusk and dawn rebuild the whole view (T, ask)
 `World.updateSkyBrightness` -> `notifyAmbientDarknessChanged` -> `WorldRenderer.notifyAmbientDarknessChanged` marks
@@ -306,6 +312,11 @@ Caution: `EntityTrackerEntry.notifyNewLocation` (line 111) tests `Math.abs(var2)
 positions times 32, not on the deltas `var7..var9`. So every tracked entity sends a move packet every
 `trackingFrequency` ticks even when it's standing still. That's a slip too, but it resyncs every client every 2 to 3
 ticks and so hides part of the drift above. Fix it only together with the client change, and keep a periodic resync.
+**Fixed (OF)**, `multiplayer.mobPhysics` (client): the client's own move still runs on a remote mob (on the ground or
+not, what it touches, footsteps) but the mob is put back where the server's path has it. Measured on the real server
+(`fixesMultiplayerTest`): two penned pigs, beta 0.07 blocks off the server's position, fixed exactly on it. The
+tracker's "moved" slip is left as it is: fixing it on the server would take away the resync vanilla clients rely on
+(their pigs would drift), and it costs only a few bytes a tick per entity.
 
 ### 16a. Invisible after a teleport (T)
 `EntityTrackerEntry.notifyNewLocation` (lines 91-97) chooses who should see the entity (`updateListeners`) *before*
@@ -327,6 +338,9 @@ which can be up to 400 ticks away.
 
 Fix: in the big-move branch, send the absolute position and update `lastX` first, then `updateListeners`; build
 spawn packets from `lastX/Y/Z`. Risk: low.
+**Fixed (OF)**, `multiplayer.trackAfterTeleport` (server), a little differently: viewers are chosen by where the entity
+is, and adding a viewer makes the entry's next position packet absolute (vanilla's 400-tick resync, brought forward),
+which also ends the offset. Checked with a console /tp on the real server; beta's server left the player invisible.
 
 ### 16b. Chunk holes after moving fast (T for the ordering; lasting holes L)
 On the client, a pre-chunk packet makes a blank all-air chunk at once, and `MultiplayerChunkCache.isChunkLoaded`
@@ -345,6 +359,9 @@ capture of one.
 Fix: sort the pending chunks by distance in `updatePlayerChunks` (bug, low risk). Optionally hold the client player
 still over chunks it hasn't received (ask: the server's flying check, `floatingTime > 80`, could kick a hovering
 player).
+**Order fixed (OF)**, `multiplayer.chunkOrder` (server): what's waiting is sorted by distance whenever the view
+re-centres. After a /tp the first chunk sent is the one underfoot (beta's: the west edge). Holding still: Still
+Faithful's.
 
 ### 17. Advanced OpenGL flicker (L)
 With Advanced OpenGL on, chunks blink out at the edges of view when turning: occlusion query results lag the camera.
@@ -530,6 +547,9 @@ still passes, but makes players faster than the stock client, which is why some 
 Fix: count the delay down whatever `breakingBlock` is, reset it on cancel, and restart from
 `processBlockBreakingAction` as single player does. The missing reset is a clear slip (OF); the overall tempo is
 what servers built around (SF, or a switch defaulting to beta). Phase 6.
+**Reset fixed (OF)**, `multiplayer.miningDelay` (client): the pause counts down and clears on letting go, as single
+player's does; the next block still starts on the held click's repeat (the tempo: SF). Measured on the real server:
+dirt by hand takes 15 ticks; beta 20 for every later block, fixed 15; a vanilla server accepts every break.
 
 ### 37. Skeletons circle (L, quirk)
 Skeletons strafe around the player (Beta 1.8 changed it): their AI, a quirk.
@@ -568,6 +588,7 @@ sensitivity's 201, one per pixel. An arrow-key nudge came first and was taken ou
 fix the cause, not a key workaround. The game's own three sliders only; a mod's are left alone.
 
 ### 41. Repeaters don't update what they power (T)
+Fixed, on by default: the user's call (2026-11-02), though a circuit could have a repeater beside a door it never opened.
 Five blocks look at their power only when the neighbour update comes from a block whose `canEmitRedstonePower()` is
 true: doors, both halves (`DoorBlock.neighborUpdate`), trapdoors, note blocks, dispensers and TNT (each one's
 `neighborUpdate`). Every redstone source returns true there (wire, torches, levers, buttons, plates, detector rails)
@@ -698,13 +719,20 @@ Signs are the only block entity with an update packet, and `ServerPlayNetworkHan
 only through this path (`blockUpdateEvent`). So a sign edited in the same tick as any other block change in that
 chunk (flowing water, crops, redstone) reaches no other player until the chunk is sent again. There's also a
 leftover `System.out.println("Sending!")` there. Fix: decode `dirtyBlocks[var11]`. Risk: none.
+**Fixed (OF)**, `multiplayer.signUpdates` (server); the stray print goes with vanilla's loop. Checked live: another
+player got the text; from beta's server, nothing.
 
-### 49. Frozen entities after a respawn (T on the code path; not seen in game)
+### 49. Frozen entities after a respawn (T; seen on the real server)
 When a dead player is removed (after the 20-tick death animation), `EntityTracker.onEntityRemoved` takes them off
 every entry's viewer list without sending destroy packets. After a respawn in the same dimension, the client keeps
 its world. So mobs, items and players near the death spot that later die, get picked up or leave stay frozen on that
 client until it relogs. Fix: send the destroys to the dead player there, or clear non-player entities on respawn.
-Risk: low. Traced by a helper agent (rated medium-high) and not re-read line by line.
+Risk: low. Seen live (`fixesMultiplayerTest`): a pig removed while the player was dead stayed on their screen after
+the respawn. (The body is ticked, and so removed, only on the client's move packets, which a dead client keeps sending.)
+**Fixed (OF)** on either side, `multiplayer.respawnEntities`: a fixed server notes what the dead player was seeing
+and tells their client to drop it on respawn (the death screen's view is unchanged); a fixed client drops every
+entity the server gave it on a respawn from death in the same dimension (the server sends what's in range again, as
+it always did). Either alone clears it.
 
 ### 50. Other players turn in steps (T)
 `ClientNetworkHandler.onEntity` uses the entity's *current* yaw when a packet carries no rotation
@@ -714,12 +742,12 @@ with 3 lerp steps, so a move-only packet right after a rotation packet cancels t
 turn in steps, and can be left facing up to about 11 degrees off. Fix: keep the last target yaw and pitch for
 move-only packets (bug). Lowering the threshold is an ask. Minor: `onEntityPosition` adds `+0.015625` to y where
 relative moves and spawns don't, a 1/64-block bob every 400 ticks.
+**Yaw fixed (OF)**, `multiplayer.turns` (client), for players and mobs. A sudden turn was left a third short (measured:
+45-degree turns ending 15 to 30 degrees off; fixed: on target). The 11.25-degree step stays (SF); so does the 1/64
+bob (probably meant: an absolute position rounds down, and the lift keeps a mob out of the floor).
 
-### 51. The vertical movement check can't fire (T, ask)
-`ServerPlayNetworkHandler.onPlayerMove`, line 210: `if (var15 > -0.5 || var15 < 0.5) var15 = 0.0;` is always true;
-it should be `&&`. So the server never corrects a vertical mismatch, and the floating counter also counts real falls
-(a long fall into the void can get the player kicked for flying at about 80 ticks). Fixing it adds corrections, and
-possibly rubber-banding, to how movement is trusted: phase 6's call, not a quiet fix.
+### 51. A server movement check (T)
+About what a server trusts from its clients; the details are kept private. Left as beta in every edition (user, 2026-11-02).
 
 ### 52. `allow-nether=false` resets time and spawn on restart (T; fixed in Pure for the Nether off)
 Seen 2026-11-02 while testing #42 on the vanilla server. Traced: `MinecraftServer.loadWorld` always makes the Nether

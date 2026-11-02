@@ -1,16 +1,17 @@
 # Releases
 
-Claude Opus 5.5, 2026-11-02. How a release is built, what's in it and why, the version scheme, the licence
-obligations and how each is met, and the steps to publish. The first release is the Pure edition for Windows
-(roadmap phase 7).
+Claude Opus 5.5, 2026-11-02. How a release of each edition is built, what's in it and why, the version scheme, the
+licence obligations and how each is met, and the steps to publish. Two editions ship: **Pure Faithful** (public
+since 0.1.0) and **Old Faithful**, which is Pure Faithful plus its own mods (public since 0.1.0, 2026-11-02, on Pure Faithful 0.1.2). Windows only
+for now (roadmap phase 7).
 
 ## Names
 
 Players see **Pure Faithful** (user, 2026-11-02): everything the Pure edition is made of is Pure Faithful's publicly,
-and Old Faithful (the Fixed edition, later) will be Pure Faithful plus its fix mods. So public names say
-purefaithful: the pack (`PureFaithful-<v>.zip`, the instance it imports as), mod ids and jars (`purefaithful-saves`
-and so on, from the project folder's name in `ModPlugin`), the config files (`config/purefaithful-*.properties`), the
-log (`logs/purefaithful/`), log line prefixes, the title line, the component's coordinates
+and Old Faithful (the Fixed edition) is Pure Faithful plus its own mods. So public names say purefaithful: the pack
+(`PureFaithful-<v>.zip`, the instance it imports as), mod ids and jars (`purefaithful-saves` and so on, from the
+project folder's name in `ModPlugin`), the config files (`config/purefaithful-*.properties`), the log
+(`logs/purefaithful/`, in Old Faithful too), log line prefixes, the title line, the component's coordinates
 (`org.studioquire.purefaithful:purefaithful-lwjgl`), release asset names, the repository (`studio-quire/pure-faithful`)
 and the page (`studioquire.org/pure-faithful/`). Internal names stay `oldfaithful`: the project folder and private
 repository, Gradle projects and tasks, Java packages, mixin config names and handler prefixes, system properties, the
@@ -18,22 +19,20 @@ harness's own mod and lines, and our natives' Maven coordinates (`org.studioquir
 `+oldfaithful.N`; they show only in the pack's `libraries/` file names and Prism's library cache). The words come from
 `release_name`, `release_file_name` and `release_tagline` in `gradle.properties`.
 
-Old Faithful's own mods (the Fixed edition's, such as `oldfaithful-fixes`) are Old Faithful's publicly, so they keep
+Old Faithful's own mods (`oldfaithful-fixes`, `-lighting`, `-options`) are Old Faithful's publicly, so they keep
 `oldfaithful-*`: a mod project whose `gradle.properties` sets `oldfaithful_edition=fixed` gets that public id and jar
-name from `ModPlugin`, and the green seal (`prism/release/icons/final/oldfaithful-128.png`) for its icon. Their config
-files and log prefixes say `oldfaithful-*` too. Not yet decided, for Old Faithful's release: its pack and server
-package (the Pure ones plus these mods, named Old Faithful; the release build would take a second mod list beside
-`modProjects`), its repository and page (the mods' `contact` links still use `release_repo` and `release_homepage`,
-Pure Faithful's), and whether its mods publish in Pure Faithful's repository or their own (they stay out of this
-one until then).
+name from `ModPlugin`, the green seal (`prism/release/icons/final/oldfaithful-128.png`) for its icon, Old Faithful's
+version and its links. Their config files and log prefixes say `oldfaithful-*` too. The edition's own words are the
+`fixed_release_*` properties: the pack `OldFaithful-<v>.zip`, the server package `OldFaithful-server-<v>.zip`, the
+repository `studio-quire/old-faithful`, the page `studioquire.org/old-faithful/`.
 
 ## Building one
 
-    ./gw release                 # everything into local/release/<version>/, with SHA256SUMS.txt
-    python tools/publish.py --check
+    ./gw release                 # Pure Faithful: everything into local/release/<version>/, with SHA256SUMS.txt
+    ./gw releaseFixed            # Old Faithful: into local/release/old-faithful-<version>/
+    python tools/publish.py --check [--target old-faithful]
 
-`release` publishes nothing. What it writes, with the names the release page uses (GitHub rewrites `+` in asset
-names, so assets have none):
+Neither publishes anything. GitHub rewrites `+` in asset names, so assets have none. Pure Faithful's release:
 
 | File | What it is |
 |---|---|
@@ -45,8 +44,37 @@ names, so assets have none):
 | `PureFaithful-<v>-third-party-sources.zip` | The sources the licences ask for, beside the component's separate downloads |
 | `SHA256SUMS.txt` | For the release notes |
 
+Old Faithful's:
+
+| File | What it is |
+|---|---|
+| `OldFaithful-<v>.zip` | The pack: Pure Faithful's pack with Old Faithful's three mods added, its name, seal and README |
+| `oldfaithful-{fixes,lighting,options}-<v>.jar` | Old Faithful's own mods on their own |
+| `OldFaithful-server-<v>.zip` | The server package with the fixes and lighting mods added, and its own README |
+| `SHA256SUMS.txt` | For the release notes |
+
+Old Faithful's release has no component file, natives or separate sources zip: Pure Faithful's mods and component
+on their own are on the Pure Faithful release that Old Faithful's names (below), and its pack and server package
+carry their own sources.
+
 Every zip entry has one fixed timestamp and a fixed order, so a rebuild from the same commit and mirror gives the same
-bytes (checked: two `release` runs, identical `SHA256SUMS.txt`).
+bytes (checked for both editions: two runs, identical `SHA256SUMS.txt`; Pure Faithful's 0.1.1 rebuilt byte for byte
+after the release script learned editions). Text files go in as checked out, so the bytes also depend on line
+endings: build from an LF checkout (this tree's working files are mostly LF, but edits leave some CRLF; a fresh
+checkout on Windows is CRLF unless told otherwise). 0.1.1 was cut in a detached worktree checked out with
+`git -c core.autocrlf=false -c core.eol=lf`, `local/` folders junctioned in, and a clone of the public snapshot
+rebuilt it byte for byte.
+
+**A release folder never changes silently.** It's the record of what was published (and what Old Faithful's check
+compares against), so `release` and `releaseFixed` stop before writing into a folder whose `SHA256SUMS.txt` this
+build would change (a file changed, added or removed), naming the files, unless `-Prelease.overwrite` says the folder
+is an unpublished build to replace. Changed code under a released version means a new version. Test builds
+(`-Prelease.test`) have their own folder and aren't guarded.
+
+`gradle/release.gradle` describes each edition once (`releaseEditions`: names, version, icon, mods, server mods,
+README and notices header) and builds both from the same templates; Old Faithful's own texts are in
+`release/old-faithful/`. A project marked `oldfaithful_edition=fixed` that the script's `fixedMods` doesn't list stops
+the build, so a new Old Faithful mod is placed in the pack and server package on purpose.
 
 ## The pack
 
@@ -68,11 +96,20 @@ bytes (checked: two `release` runs, identical `SHA256SUMS.txt`).
   licence material below.
 - Minecraft's jar is always Mojang's, by URL and SHA-1, as in the dev instances. A .mrpack (Modrinth's pack format)
   can't express our own `net.minecraft` and `org.lwjgl` components, so the pack is a Prism zip only.
+- **Old Faithful's** is the same template with its own name, seal (`iconKey=oldfaithful`), notes, README
+  (`release/old-faithful/pack-README.txt`), notices header and licence folder (`licenses/old-faithful/`). The LWJGL
+  component in it keeps Pure Faithful's name and version. No config files are shipped: each mod writes its own
+  defaults, and Old Faithful's window defaults (remembered, maximised the first time) come from `oldfaithful-options`
+  asking the display mod for them (`docs/options.md`), so standalone installs get them too.
+- **Tested unseen**: `./gw :harness:clientStartupTestPack` and `clientStartupTestPackFixed` unpack each release pack
+  and run the start-up test on what's inside it (its libraries, natives and mods, with the self-test mod beside
+  them); Old Faithful's runs its fix checks in the world and its first-start checks too. Prism itself and the
+  instance files aren't run (below, Not checked yet).
 
 ## On their own: mods and the LWJGL component
 
-- The mods are the same jars as in the pack. Each carries the MIT licence (`LICENSE_<id>`), the icon, and contact
-  links in `fabric.mod.json`.
+- The mods are the same jars as in the packs. Each carries the MIT licence (`LICENSE_<id>`), the icon, and contact
+  links in `fabric.mod.json` (Old Faithful's point to its own repository and page).
 - **The component, one step** (README.md has the player's wording): with Prism closed, put `org.lwjgl.json` into the
   instance's `patches/` folder, replacing what's there. Prism prefers a local patch file over its metadata for the
   same uid (`ComponentUpdateTask` `loadComponent`), downloads each library from its URL and checks its SHA-1.
@@ -83,31 +120,50 @@ bytes (checked: two `release` runs, identical `SHA256SUMS.txt`).
   `--enable-native-access`. The component's classes are all Java 8 bytecode, and on Temurin 8u504 its core, SDL3 and
   OpenAL Soft load and start (a throwaway check, 2026-11-02); the game on it under Java 8 isn't tested, so the guide
   says Java 21.
+- **Old Faithful's mods need none of Pure Faithful's**: no code or `depends` between them, each works alone in any
+  Babric instance. Two soft links: `oldfaithful-options` asks the display mod for its window defaults (ignored
+  without it), and `oldfaithful-fixes` names the edition on the title line through the hardening mod (no line
+  without it). So a standalone player takes Old Faithful's jars from its release and, for the whole edition, Pure
+  Faithful's mods and component from the Pure Faithful release it names (Old Faithful's README says so); on Modrinth,
+  no required dependencies, `oldfaithful-options` with an optional one on Pure Faithful Display.
 
 ## Versions
 
-- **One number for everything**: `oldfaithful_version` in `gradle.properties`, carried by every mod, the component
-  (`<v>+lwjgl.3.4.3`), the pack and the server package. Semantic versioning in spirit: patch for fixes, minor for
-  anything a player would notice, major when worlds, configs or setup stop carrying over. Pre-releases get a
-  suffix (`0.2.0-beta.1`).
-- **The component must change version whenever its bytes do**, which one number guarantees: Prism keeps downloaded
-  libraries in a shared cache by Maven path and never re-checks them, so a changed jar under an old version would
-  never reach players.
+- **Each edition has its own number.** Pure Faithful's is `oldfaithful_version` in `gradle.properties` (the property
+  keeps the project's internal name), carried by its mods, the component (`<v>+lwjgl.3.4.3`), its pack and server
+  package. Old Faithful's is `fixed_edition_version`, carried by its own mods, its pack and server package; it
+  started at 0.1.0. Semantic versioning in spirit for both: patch for fixes, minor for anything a player would
+  notice, major when worlds, configs or setup stop carrying over. Pre-releases get a suffix (`0.2.0-beta.1`).
+  Why not one shared number: Old Faithful will change far more often than Pure Faithful (the bug catalogue), and a
+  shared number would put Pure Faithful releases with nothing in them on GitHub and Modrinth each time.
+- **Old Faithful ships on a released Pure Faithful.** Its pack carries Pure Faithful's mods and component as some Pure
+  Faithful release has them, byte for byte, and its README, notices and changelog name that version. `releaseFixed`
+  checks this (`releaseFixedPureCheck`): the Pure Faithful jars it builds against `local/release/<pure
+  version>/SHA256SUMS.txt`; if they differ, it stops, since Pure Faithful has changed since its release and needs a
+  new version, released together with this Old Faithful (build both from the same commit). If that folder doesn't
+  exist yet, it says so and goes on: build Pure Faithful's from the same commit. `-Prelease.test` builds anyway, with
+  a warning, into `local/release/old-faithful-<version>-test/`, for play-testing only.
+- **The component must change version whenever its bytes do**, which Pure Faithful's number guarantees (and the
+  check above carries into Old Faithful): Prism keeps downloaded libraries in a shared cache by Maven path and never
+  re-checks them, so a changed jar under an old version would never reach players.
 - Our natives carry their own build revision (`3.4.18+oldfaithful.1`); a rebuild that changes their bytes bumps it
   (the verification metadata fails otherwise).
-- Git tags `v<version>` on the public repository; GitHub release `v<version>`; Modrinth versions `<version>` with
-  game version b1.7.3 and loader babric/fabric. `CHANGELOG.md` gets an entry per release, in players' terms; the
-  release notes are that entry plus `SHA256SUMS.txt`.
+- Git tags `v<version>` on each public repository; GitHub release `v<version>`; Modrinth versions `<version>` with
+  game version b1.7.3 and loader babric. Each edition's changelog gets an entry per release, in players' terms
+  (`CHANGELOG.md` Pure Faithful's, `release/old-faithful/CHANGELOG.md` Old Faithful's, which becomes its
+  repository's `CHANGELOG.md`); the release notes are that entry plus `SHA256SUMS.txt`.
 - **In the game**: the title screen shows "Pure Faithful <version>" under beta's own "Minecraft Beta 1.7.3", in the
-  same grey (the hardening mod's `Branding`; every Pure Faithful setup has that mod; Old Faithful will need its own
-  name there). The client's log starts
-  with the mods and their versions. `clientStartupTest` reads the title screen's pixels and saves the corner
-  (`title-corner.png`).
+  same grey (the hardening mod's `Branding`; every Pure Faithful setup has that mod). An edition built on it names
+  itself there instead: a mod with `"custom": {"purefaithful-hardening:branding": "<name>"}` in its `fabric.mod.json`
+  makes the line "<name> <that mod's version>"; `oldfaithful-fixes` says "Old Faithful". The client's log starts with
+  the mods and their versions. The start-up tests read the title screen's pixels, save the corner
+  (`title-corner.png`) and check the line's text.
 
 ## Licences: what we ship and what each asks
 
-Our own code is MIT. Everything else, by artifact (the pack's `THIRD-PARTY-NOTICES.txt` is assembled from
-`release/notices/`; licence texts in `release/licenses/` plus each jar's own):
+Our own code is MIT. Everything else, by artifact (each pack's `THIRD-PARTY-NOTICES.txt` is assembled from its
+header and `release/notices/`; licence texts in `release/licenses/` plus each jar's own). Old Faithful's pack and
+server package contain the same third-party software as Pure Faithful's, so the same notices, texts and sources:
 
 | What | Licence | What it asks of us | How it's met |
 |---|---|---|---|
@@ -134,45 +190,72 @@ Doubts, judged rather than asked of a lawyer: whether tiny-remapper's sources pl
 public build at its tag) are everything LGPL-3 §4(d)(0) wants for a shaded jar (we think yes, and it's Fabric's own
 distribution model); FreeB 1.1 is honoured as written, not leaning on SGI's 2008 FreeB 2.0.
 
-## The public repository
+## The public repositories
 
-This repository is a snapshot of the project's working repository, made for each release by a tool that checks
-what goes public; its history starts at the first release.
+Each edition's public repository (`studio-quire/pure-faithful`, `studio-quire/old-faithful`) is a snapshot of the
+project's working repository, made for each release by a tool that checks what goes public; its history starts at
+the first release.
 
 ## Publishing, when the user says go
 
+Pure Faithful:
+
 1. `./gw build` and the harness's tests (`docs/building.md`), `./gw release`; then `python tools/publish.py --check`
    on the same commit, and `python tools/publish.py`.
-2. Create `studio-quire/pure-faithful`, push `../pure-faithful-public` to it, tag `v<version>`.
+2. Push `../pure-faithful-public` to `studio-quire/pure-faithful`, tag `v<version>`.
 3. A GitHub release `v<version>` with every file in `local/release/<version>/` (names unchanged: `org.lwjgl.json`'s
    URLs point at them), notes from `CHANGELOG.md` and `SHA256SUMS.txt`.
 4. Check the standalone component in a Prism instance that downloads from the release (the URLs only work now).
 5. Modrinth: `python tools/modrinth.py release <version>` (below).
-6. studioquire.org: the page from `release/drafts/site-page.html`, a card, `releases.json` for `/get/pure-faithful`
-   (quire-site's CLAUDE.md says how).
+6. studioquire.org: the page, the card, `releases.json` (quire-site's CLAUDE.md says how).
+
+Old Faithful (0.1.0 went out this way with Pure Faithful 0.1.2, 2026-11-02, from one commit):
+
+1. If Pure Faithful has changed since its last release, Old Faithful can't ship on it (`releaseFixedPureCheck`):
+   bump `oldfaithful_version`, give `CHANGELOG.md` an entry, and release Pure Faithful first from the same commit as
+   above. Date Old Faithful's entry in `release/old-faithful/CHANGELOG.md` and check it names that Pure Faithful
+   version, as its README, notices and release notes will.
+2. Bring `release/old-faithful/README.md` and the changelog up to date with the fixes (the bug hunt adds them).
+3. `./gw build`, the harness's tests including `clientStartupTestFixed`, `fixesMultiplayerTest` and
+   `clientStartupTestPackFixed`, `./gw release releaseFixed` (no `-Prelease.test`: the Pure Faithful check must
+   pass); `python tools/publish.py --target old-faithful --check`, then without `--check`.
+4. Push `../old-faithful-public` to `studio-quire/old-faithful` (remote `public`), tag `v<version>`.
+5. A GitHub pre-release `v<version>` with every file in `local/release/old-faithful-<version>/`, notes from its
+   changelog entry, a line naming the Pure Faithful release whose mods and component it carries (with a link), and
+   `SHA256SUMS.txt`.
+6. Modrinth: `python tools/modrinth.py release <version> --edition old-faithful`.
+7. studioquire.org: `/get/old-faithful` follows the newest release by itself; the page's text when the README's
+   changes. Its cover and link preview are a real frame, lava in a cave lit by the lighting mod, taken unseen by
+   `./gw :harness:sceneShot`.
 
 ## Modrinth
 
-Since 2026-11-02 the four mods are Modrinth projects in the **Studio Quire** organisation
+Since 2026-11-02 the four Pure Faithful mods are Modrinth projects in the **Studio Quire** organisation
 (modrinth.com/organization/studio-quire; its icon is the site's mark, rendered from quire-site's `mark.svg`), which
 the user asked the studio to manage: `pure-faithful-hardening`, `-saves`, `-speed`, `-display`, texts from
-`release/drafts/modrinth.md`, the β seal, MIT, source and issues on GitHub. The token (the user's account,
-Shoalstone) is in `local/modrinth-token.txt`, git-ignored; never print it.
+`release/drafts/modrinth.md`, the β seal, MIT, source and issues on GitHub. Old Faithful's three were made the
+same way on 2026-11-02: `old-faithful-fixes`, `-lighting`, `-options`, texts in `release/drafts/old-faithful-modrinth.md`,
+the green seal, source and issues on `studio-quire/old-faithful`. The token (the user's account, Shoalstone) is in
+`local/modrinth-token.txt`, git-ignored; never print it.
 
-- A release: `python tools/modrinth.py release <version> [--type beta|release]` uploads each jar from
-  `local/release/<version>/` and checks it against `SHA256SUMS.txt` (`verify` alone re-checks).
+- A release: `python tools/modrinth.py release <version> [--edition old-faithful] [--type beta|release]` uploads each
+  jar from the edition's release folder and checks it against `SHA256SUMS.txt` (`verify` alone re-checks).
+  Upload every release, even while the projects are in review (0.1.1 was), so approval doesn't serve an old one.
 - b1.7.3 takes the `babric` loader only: Modrinth refuses `fabric` for game versions before 18w43b (older uploads
   elsewhere show both).
-- Sides are set per version as v3's `environment` (`client_or_server` for hardening and saves, `client_only` for
-  speed and display); v2's `client_side`/`server_side` on the project are ignored and read back from it.
-- No dependencies between the mods: each works alone. The display mod's real requirement, our LWJGL component, isn't
-  something Modrinth can install; its description says how.
+- Sides are set per version as v3's `environment` (`client_or_server` for hardening, saves and lighting,
+  `client_or_server_prefers_both` for fixes, `client_only` for speed, display and options); v2's
+  `client_side`/`server_side` on the project are ignored and read back from it.
+- No required dependencies between any of the mods: each works alone. The display mod's real requirement, our LWJGL
+  component, isn't something Modrinth can install; its description says how. `oldfaithful-options` versions list
+  Pure Faithful Display as optional.
 
 ## Not checked yet
 
-- The pack imported into a real Prism: the import name from the file name, the icon, the notes, `+jvmArgs` reaching
+- The packs imported into a real Prism: the import name from the file name, the icon, the notes, `+jvmArgs` reaching
   the game, Java 21 chosen, a first launch downloading the game and its sounds. The template is the dev instance's,
-  which the user has imported, plus those four, each read from Prism 11.1.1's source, not tried.
+  which the user has imported, plus those four, each read from Prism 11.1.1's source, not tried. What's inside each
+  pack starts and plays unseen (`clientStartupTestPack`, `-Fixed`).
 - The standalone component in a real Babric instance: replacing `patches/org.lwjgl.json`, the downloads from the
   release's URLs (only possible once a release exists, or against a draft release), the display mod working there.
-- The server package from the release zip on a machine other than this one.
+- The server packages from the release zips on a machine other than this one.

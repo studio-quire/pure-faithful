@@ -141,26 +141,32 @@ tasks.register('prismFixedInstance', Zip) {
 // with our hardening mod; start scripts that check the server jar's hash. Written to local/server-package/, never
 // committed; :harness:multiplayerTest runs the game from it.
 // Applied inside each task's configuration, which runs lazily, after the subprojects are evaluated. The notices,
-// licences and sources come from gradle/release.gradle, as for the pack.
-ext.serverPackageContents = { spec ->
+// licences, sources and the editions come from gradle/release.gradle, as for the pack; the dev tasks here build Pure
+// Faithful's, and `releaseServerFixed` Old Faithful's (its own README and mods).
+ext.serverPackageContents = { spec, Map ed = releaseEditions.pure ->
   spec.with(copySpec {
-    def tokens = [SERVER_SHA1: minecraft_server_sha1]
+    def tokens = releaseFilter(ed)
     from('server') {
-        filesMatching(['*.bat', '*.sh', '*.txt']) {
-            filter { String line -> line.replaceAll(/@([A-Z0-9_]+)@/) { all, name -> tokens[name] } }
-        }
+        if (ed.serverReadme != 'server/README.txt') exclude 'README.txt'
+        filesMatching(['*.bat', '*.sh', '*.txt']) { filter tokens }
         filesMatching(['*.bat', '*.txt']) { filter(org.apache.tools.ant.filters.FixCrLfFilter, eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('crlf')) }
         filesMatching('*.sh') {
             filter(org.apache.tools.ant.filters.FixCrLfFilter, eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'))
             filePermissions { unix('rwxr-xr-x') }
         }
     }
+    if (ed.serverReadme != 'server/README.txt') {
+        from(ed.serverReadme) {
+            rename { 'README.txt' }
+            filter tokens
+            filter(org.apache.tools.ant.filters.FixCrLfFilter, eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('crlf'))
+        }
+    }
     from(oldfaithfulMinecraft.intermediaryMappings) { into 'libraries' }
     from(configurations.loaderLibraries) { into 'libraries' }
-    from(project(':oldfaithful-hardening').tasks.named('remapJar')) { into 'mods' }
-    from(project(':oldfaithful-saves').tasks.named('remapJar')) { into 'mods' }
-    with licencesSpec(false)
-    with sourcesSpec(false)
+    ed.serverMods.each { from(project(":${it}").tasks.named('remapJar')) { into 'mods' } }
+    with licencesSpec(false, ed)
+    with sourcesSpec(false, ed)
   })
 }
 tasks.register('serverPackage', Sync) {

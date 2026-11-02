@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.studioquire.oldfaithful.selftest.MultiplayerScenes;
 
 /**
  * :harness:multiplayerTest only: a player whose name starts with "Rider" joins sitting in a boat, so the test's raw
@@ -24,9 +25,13 @@ abstract class PlayerManagerRideMixin {
 	 */
 	@Inject(method = "addPlayer", at = @At("HEAD"))
 	private void oldfaithful$placeInSky(ServerPlayerEntity player, CallbackInfo ci) {
-		if (!Boolean.getBoolean("oldfaithful.selftest.multiplayer") || !player.name.startsWith("Sky")) return;
-		player.setPositionAndAngles(player.x, SKY, player.z, player.yaw, player.pitch);
-		System.out.println("[oldfaithful-selftest] " + player.name + " placed in the sky at y " + SKY);
+		boolean client = player.name.equals(MultiplayerScenes.CLIENT);
+		if (!Boolean.getBoolean("oldfaithful.selftest.multiplayer") || !(player.name.startsWith("Sky") || client)) return;
+		double y = client ? MultiplayerScenes.FLOOR + 1 : SKY;
+		player.setPositionAndAngles(player.x, y, player.z, player.yaw, player.pitch);
+		System.out.println("[oldfaithful-selftest] " + player.name + " placed in the sky at y " + y);
+		// :harness:fixesMultiplayerTest's hidden client stands on a scene of its own.
+		if (client) MultiplayerScenes.buildClientScene(player);
 	}
 
 	@Inject(method = "addPlayer", at = @At("RETURN"))
