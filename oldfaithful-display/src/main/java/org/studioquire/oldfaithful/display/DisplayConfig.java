@@ -1,0 +1,96 @@
+package org.studioquire.oldfaithful.display;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
+
+import org.studioquire.oldfaithful.lwjgl.Settings;
+
+/**
+ * config/purefaithful-display.properties, read before the game starts and handed to our LWJGL's {@link Settings}.
+ * Written with defaults and explanations if missing; a setting the file lacks (it was written by an older version) is
+ * appended with its explanation.
+ */
+public final class DisplayConfig implements PreLaunchEntrypoint {
+	private static final String HEADER = "# purefaithful-display. Restart the game after changing anything here.\n";
+	/** Key, default, explanation. */
+	private static final String[][] SETTINGS = {
+			{"fullscreen.exclusive", "false",
+					"# Fullscreen (F11) switches the screen's video mode, as the original game did, instead of covering the\n"
+					+ "# screen with a borderless window. Borderless switches instantly and alt-tabs cleanly.\n"},
+			{"mouse.input", "system",
+					"# Mouse look. system: the view turns as the desktop pointer would move, with the system's pointer speed\n"
+					+ "# and acceleration (Windows' \"Enhance pointer precision\"), as the original game did.\n"
+					+ "# raw: the mouse's own movement, unaffected by those settings.\n"},
+			{"window.scaleToDisplay", "true",
+					"# The window opens scaled to the display (854x480 at 150% scaling opens as 1281x720).\n"},
+			{"mouse.subpixel", "false",
+					"# Mouse look turns by the mouse's exact movement instead of whole pixels per frame, so slow and diagonal\n"
+					+ "# turns are smooth. The original game turned by whole pixels (false).\n"},
+			{"frame.smooth", "true",
+					"# With vsync, each frame moves the world and the view by exactly one refresh's worth, as it's shown,\n"
+					+ "# instead of by the time the game happened to measure (in whole milliseconds, at a varying point of the\n"
+					+ "# frame), which makes a fine stutter. false: the original game's timing.\n"},
+			{"window.remember", "false",
+					"# The window opens where it was when the game last closed: its size, position, display, and maximised or\n"
+					+ "# not. Changing the launcher's window settings (Prism's Window size, Start Minecraft maximized) wins over\n"
+					+ "# it the next time. false: the window opens as the launcher asks, as the original game did.\n"},
+			{"vsync", "true",
+					"# Frames wait for the screen's refresh: no tearing, even pacing. The original game ran without it\n"
+					+ "# (false), drawing as fast as it could, which tears and judders on today's displays.\n"},
+	};
+
+	@Override
+	public void onPreLaunch() {
+		if (!DisplayMixinPlugin.layerPresent()) return;
+		Properties p = new Properties();
+		File file = FabricLoader.getInstance().getConfigDir().resolve("purefaithful-display.properties").toFile();
+		try {
+			StringBuilder add = new StringBuilder();
+			if (file.isFile()) {
+				try (InputStream in = new FileInputStream(file)) {
+					p.load(in);
+				}
+			} else {
+				file.getParentFile().mkdirs();
+				add.append(HEADER);
+			}
+			for (String[] s : SETTINGS) {
+				if (!p.containsKey(s[0])) add.append('\n').append(s[2]).append(s[0]).append('=').append(s[1]).append('\n');
+			}
+			if (add.length() > 0) {
+				try (OutputStream out = new FileOutputStream(file, true)) {
+					out.write(add.toString().getBytes(StandardCharsets.ISO_8859_1));
+				}
+			}
+		} catch (IOException e) {
+			System.out.println("[purefaithful-display] WARN Could not read or write " + file + ", using defaults: " + e);
+		}
+		Settings.exclusiveFullscreen = Boolean.parseBoolean(value(p, "fullscreen.exclusive"));
+		Settings.rawMouse = "raw".equalsIgnoreCase(value(p, "mouse.input"));
+		Settings.scaleInitialSize = Boolean.parseBoolean(value(p, "window.scaleToDisplay"));
+		Settings.vsync = Boolean.parseBoolean(value(p, "vsync"));
+		subpixelLook = Boolean.parseBoolean(value(p, "mouse.subpixel"));
+		FrameClock.enabled = Boolean.parseBoolean(value(p, "frame.smooth"));
+		Settings.placement = WindowPlacement.choose(Boolean.parseBoolean(value(p, "window.remember")),
+				FabricLoader.getInstance().getConfigDir().resolve("purefaithful-display-window.properties").toFile());
+	}
+
+	/** mouse.subpixel: mouse look by the unrounded motion (GameRendererMixin). */
+	public static volatile boolean subpixelLook;
+
+	private static String value(Properties p, String key) {
+		for (String[] s : SETTINGS) {
+			if (s[0].equals(key)) return p.getProperty(key, s[1]).trim();
+		}
+		throw new IllegalArgumentException(key);
+	}
+}
