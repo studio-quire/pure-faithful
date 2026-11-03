@@ -17,6 +17,8 @@ keep the game from grabbing (the harness's HandsOff), and this script guards the
 runs: if the clip rectangle changes, it stops the command at once, puts the clip back (exit code 125); if the cursor
 moves three times within two seconds with no mouse input in the 100 ms before (a SetCursorPos while the user's
 mouse is still), it stops it too (exit code 126).
+With PRIVATE_DESKTOP_NO_GUARD=1 the guard is off (the user's call, 2026-11-03: their own game grabbing the cursor
+stopped tests; the harness's HandsOff still keeps the test game from grabbing).
 
 Windows only. Claude Opus 5.5, 2026-11-01.
 """
@@ -203,12 +205,15 @@ def run(command, timeout):
         if not kernel32.AssignProcessToJobObject(job, pi.hProcess):
             kernel32.TerminateProcess(pi.hProcess, 1)
             check(False, "AssignProcessToJobObject")
-        guard = CursorGuard()
-        print(f"[private_desktop] cursor guard on: clip {guard.clip}, checked every {GUARD_SLICE_MS} ms", file=sys.stderr, flush=True)
+        guard = None if os.environ.get("PRIVATE_DESKTOP_NO_GUARD") == "1" else CursorGuard()
+        if guard:
+            print(f"[private_desktop] cursor guard on: clip {guard.clip}, checked every {GUARD_SLICE_MS} ms", file=sys.stderr, flush=True)
+        else:
+            print("[private_desktop] cursor guard off (PRIVATE_DESKTOP_NO_GUARD=1)", file=sys.stderr, flush=True)
         kernel32.ResumeThread(pi.hThread)
         deadline = None if timeout is None else time.monotonic() + timeout
         while kernel32.WaitForSingleObject(pi.hProcess, GUARD_SLICE_MS) == WAIT_TIMEOUT:
-            trouble = guard.problem()
+            trouble = guard.problem() if guard else None
             if trouble:
                 kernel32.TerminateJobObject(job, trouble[0])
                 if trouble[0] == 125:

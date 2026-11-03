@@ -3,7 +3,8 @@
     python tools/modrinth.py release <version> [--edition E] [--type beta|release|alpha]   upload the release's jars
     python tools/modrinth.py verify <version> [--edition E]                                 compare with SHA256SUMS
 
-Editions: pure-faithful (the default; local/release/<version>/) and old-faithful (local/release/old-faithful-<version>/).
+Editions: pure-faithful (the default; local/release/<version>/), old-faithful (local/release/old-faithful-<version>/)
+and still-faithful (local/release/still-faithful-<version>/).
 
 The token is read from local/modrinth-token.txt (git-ignored) and never printed. The projects belong to the Studio
 Quire organisation; creating them was a one-off, done by hand through the same API.
@@ -31,7 +32,6 @@ EDITIONS = {
             "purefaithful-display": ("pure-faithful-display", "client_only", {}),
         },
     },
-    # Not created on Modrinth yet (release/drafts/old-faithful-modrinth.md has the texts).
     "old-faithful": {
         "name": "Old Faithful", "repo": "https://github.com/studio-quire/old-faithful", "folder": "old-faithful-{v}",
         "mods": {
@@ -40,6 +40,15 @@ EDITIONS = {
             "oldfaithful-lighting": ("old-faithful-lighting", "client_or_server", {}),
             # Its window defaults are asked of Pure Faithful Display, when it's there.
             "oldfaithful-options": ("old-faithful-options", "client_only", {"pure-faithful-display": "optional"}),
+        },
+    },
+    "still-faithful": {
+        "name": "Still Faithful", "repo": "https://github.com/studio-quire/still-faithful", "folder": "still-faithful-{v}",
+        "mods": {
+            # World changes where the world runs, what you see on the client; glowstone's speed needs both.
+            # Its settings appear on Old Faithful Options' screen; background saving needs Pure Faithful Saves.
+            "stillfaithful-polish": ("still-faithful-polish", "client_or_server_prefers_both",
+                                     {"old-faithful-options": "optional", "pure-faithful-saves": "optional"}),
         },
     },
 }

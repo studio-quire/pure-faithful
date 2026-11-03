@@ -147,17 +147,17 @@ public final class SelfTest implements DedicatedServerModInitializer, PreLaunchE
 		return out.toByteArray();
 	}
 
-	void check(String name, boolean ok) {
+	public void check(String name, boolean ok) {
 		if (ok) pass(name);
 		else fail(name, new AssertionError("check failed"));
 	}
 
-	void pass(String name) {
+	public void pass(String name) {
 		pass++;
 		System.out.println("[oldfaithful-selftest] PASS " + name);
 	}
 
-	void fail(String name, Throwable t) {
+	public void fail(String name, Throwable t) {
 		fail++;
 		System.out.println("[oldfaithful-selftest] FAIL " + name + ": " + t);
 		t.printStackTrace(System.out);

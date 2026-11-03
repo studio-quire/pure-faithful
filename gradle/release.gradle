@@ -74,7 +74,7 @@ dependencies {
 }
 
 // The @TOKENS@ in the templates, for one edition. VERSION, NAME and the rest are the edition's; PURE_* and the
-// component's are Pure Faithful's, which Old Faithful carries as they are.
+// component's are Pure Faithful's, which Old Faithful carries as they are; FIXED_* Old Faithful's.
 ext.releaseTokens = { Map ed ->
     ([
         VERSION              : ed.version,
@@ -87,6 +87,10 @@ ext.releaseTokens = { Map ed ->
         PURE_NAME            : release_name,
         PURE_VERSION         : pureVersion,
         PURE_REPO            : release_repo,
+        // Old Faithful's, which Still Faithful carries as it is (gradle/still-faithful.gradle).
+        FIXED_NAME           : hasFixed ? fixed_release_name : '',
+        FIXED_VERSION        : hasFixed ? fixed_edition_version : '',
+        FIXED_REPO           : hasFixed ? fixed_release_repo : '',
         SERVER_SHA1          : minecraft_server_sha1,
         FABRIC_LOADER_VERSION: fabric_loader_version,
         LWJGL_VERSION        : componentVersion,
@@ -283,6 +287,8 @@ def guardRelease = { Sync sync, String edition, String version, String versionPr
                 "build you mean to replace, run with -Prelease.overwrite.")
     }
 }
+
+ext.guardRelease = guardRelease
 
 // Pure Faithful ---------------------------------------------------------------------------------------------------
 

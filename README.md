@@ -9,8 +9,10 @@ Pure Faithful is mods, not a modified game: your launcher downloads Minecraft it
 account. Nothing of Mojang's is in this repository or in our downloads.
 
 **[Old Faithful](https://github.com/studio-quire/old-faithful)** is Pure Faithful plus fixes for beta's own clear
-mistakes, each on a switch, with what players built their game around kept as beta had it. Pure Faithful is for
-Windows now; macOS and Linux follow. If you'd like to help test on them, open an issue.
+mistakes, each on a switch, with what players built their game around kept as beta had it.
+**[Still Faithful](https://github.com/studio-quire/still-faithful)** is Old Faithful plus the polish later versions
+brought while the game stayed beta (smooth dusk, stairs that drop themselves, animals that stay, sturdier boats).
+Pure Faithful is for Windows now; macOS and Linux follow. If you'd like to help test on them, open an issue.
 
 ## What it does
 

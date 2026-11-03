@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.RegularFileProperty;
+import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
@@ -81,6 +82,10 @@ public abstract class ClientStartupTask extends GameTestTask {
 	@Input
 	public abstract Property<Boolean> getOldFaithful();
 
+	/** Files written into the game's config folder before the main launch: name to contents (none by default). */
+	@Input
+	public abstract MapProperty<String, String> getConfigs();
+
 	public ClientStartupTask() {
 		getPython().convention("python");
 		getTimeoutSeconds().convention(180);
@@ -101,6 +106,10 @@ public abstract class ClientStartupTask extends GameTestTask {
 		}
 		Path run = freshRunDir();
 		prepare(run, linux);
+		for (Map.Entry<String, String> c : getConfigs().getOrElse(Map.of()).entrySet()) {
+			Files.createDirectories(run.resolve("config"));
+			Files.writeString(run.resolve("config").resolve(c.getKey()), c.getValue(), StandardCharsets.ISO_8859_1);
+		}
 
 		List<String> failures = new ArrayList<>();
 		List<String> lines = launch(run, linux, List.of(PRISM_WINDOW + "1000x600",

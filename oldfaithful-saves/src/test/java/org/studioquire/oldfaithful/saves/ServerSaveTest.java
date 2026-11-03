@@ -456,8 +456,14 @@ class ServerSaveTest {
 			}
 		}
 		Files.createDirectories(run.resolve("mods"));
-		for (String property : new String[] {"oldfaithful.saves.mod", "oldfaithful.saves.scenario.mod"}) {
-			Path mod = Path.of(System.getProperty(property));
+		List<String> mods = new ArrayList<>(List.of(System.getProperty("oldfaithful.saves.mod"), System.getProperty("oldfaithful.saves.scenario.mod")));
+		// Other mods that change saving, run with this one (Still Faithful's background autosave, for instance).
+		String extraMods = System.getProperty("oldfaithful.saves.extraMods", "");
+		for (String m : extraMods.split(java.io.File.pathSeparator)) {
+			if (!m.isEmpty()) mods.add(m);
+		}
+		for (String m : mods) {
+			Path mod = Path.of(m);
 			Files.copy(mod, run.resolve("mods").resolve(mod.getFileName()));
 		}
 		int port;

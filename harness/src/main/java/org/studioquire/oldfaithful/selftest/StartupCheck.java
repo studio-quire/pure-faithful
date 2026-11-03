@@ -42,7 +42,12 @@ public final class StartupCheck {
 	private static final String REARRANGE = System.getProperty("oldfaithful.selftest.rearrange");
 	/** host:port of a test server to join instead of making a world (MultiplayerCheck). */
 	private static final String JOIN = System.getProperty("oldfaithful.selftest.joinServer");
-	private static final long STALL_MS = 150_000;
+	private static final long STALL_MS = Long.getLong("oldfaithful.selftest.stallMs", 150_000L);
+	/** "<name>:<mod id>" for an edition beyond Old Faithful: its title line, and the name its settings button carries. */
+	static final String EDITION = System.getProperty("oldfaithful.selftest.edition");
+	/** Other mods' test-only checks in the running world, after the Fixed edition's ({@link WorldCheck}). */
+	private static java.util.List<WorldCheck> worldChecks;
+	private static int worldCheck;
 
 	private static final SelfTest results = new SelfTest();
 	private static int phase;
@@ -102,10 +107,15 @@ public final class StartupCheck {
 		}
 	}
 
-	/** The line says which edition this is: Old Faithful's name and version where its fix mod is, else Pure Faithful's. */
+	/**
+	 * The line says which edition this is: Old Faithful's name and version where its fix mod is, else Pure Faithful's;
+	 * a run of another edition names it ({@link #EDITION}: its name, and the mod whose version it carries).
+	 */
 	private static void titleLineCheck() {
 		FabricLoader loader = FabricLoader.getInstance();
-		String expected = loader.getModContainer("oldfaithful-fixes")
+		String expected = EDITION != null
+				? EDITION.split(":")[0] + " " + loader.getModContainer(EDITION.split(":")[1]).get().getMetadata().getVersion().getFriendlyString()
+				: loader.getModContainer("oldfaithful-fixes")
 				.map(m -> "Old Faithful " + m.getMetadata().getVersion().getFriendlyString())
 				.orElseGet(() -> "Pure Faithful " + loader.getModContainer("purefaithful-hardening").get().getMetadata().getVersion().getFriendlyString());
 		results.check("the title line reads \"" + Branding.TEXT + "\" (expected \"" + expected + "\")", expected.equals(Branding.TEXT));
@@ -198,6 +208,13 @@ public final class StartupCheck {
 			case 5:
 				// The Fixed edition's fixes in the running world (`clientStartupTestFixed`).
 				if (fixes.tick(mc)) optionsOrFinish(mc);
+				return;
+			case 8:
+				// Another edition's checks (WorldCheck), one after another.
+				if (worldChecks.get(worldCheck).tick(mc)) {
+					if (++worldCheck < worldChecks.size()) worldChecks.get(worldCheck).start(mc, results);
+					else optionsOrFinish(mc);
+				}
 				return;
 			case 6:
 				// Old Faithful's options mod in the running world.
@@ -338,6 +355,14 @@ public final class StartupCheck {
 	}
 
 	private static void optionsOrFinish(Minecraft mc) throws ReflectiveOperationException {
+		if (worldChecks == null) {
+			worldChecks = FabricLoader.getInstance().getEntrypoints(WorldCheck.ENTRYPOINT, WorldCheck.class);
+			if (!worldChecks.isEmpty()) {
+				worldChecks.get(0).start(mc, results);
+				phase = 8;
+				return;
+			}
+		}
 		if (!OptionsCheck.loaded()) {
 			finish(mc);
 			return;

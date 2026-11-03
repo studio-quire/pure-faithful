@@ -282,6 +282,16 @@ library. The Java side needed no change.
   monitors, real IMEs and non-US layouts, an actual default-device change. A real Prism launch with a window size or
   maximised set (the hidden test passes Prism's property itself, and a hidden window's maximise is SDL's pending one,
   applied when it's shown).
+- A tear on alt-tab (the user, Still Faithful's play-test, 2026-11-03): in borderless fullscreen, sometimes a line
+  of tearing with the world showing through (the pause backdrop, most likely). Not reproducible unseen (it's in
+  what the display scans out; a read-back frame is whole). From the code (Claude Opus 5.5): every frame is drawn
+  whole and swapped with vsync, focus changes neither the window's size nor the swap interval, and the pause screen
+  comes 0.5 s after focus is lost (beta's `onFrameUpdate`), so a frame without the backdrop is one from before the
+  pause: most likely the driver's present path switching between flipping a window that covers the display and
+  composing it, and briefly showing its older buffer. The user's answers: a maximised window doesn't seem to do it;
+  NVIDIA's "Prefer layered on DXGI swapchain" doesn't stop it. Remedy if ever wanted: a window one pixel larger than
+  the display in borderless fullscreen (always composed, as Chromium does; up to a frame more latency, as maximised).
+  Left alone (the user's call, 2026-11-03).
 - Java 25 prints LWJGL's `sun.misc.Unsafe` deprecation warning (its legacy memory backend); harmless now.
 - macOS (at release, the user's call): natives need CI (`docs/natives.md`) and the main-thread dispatch the survey
   describes. Linux arm64: planned

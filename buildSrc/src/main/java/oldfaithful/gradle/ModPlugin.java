@@ -23,6 +23,15 @@ import static oldfaithful.gradle.MinecraftPlugin.prop;
  * `build/libs/<mod>-<version>.jar` is the installable mod; the `-dev` jar is the named one.
  */
 public class ModPlugin implements Plugin<Project> {
+	/**
+	 * An edition's property: the root's gradle.properties, or (Still Faithful's, kept private with its folder) the mod
+	 * project's own.
+	 */
+	private static String editionProp(Project project, String name) {
+		Object own = project.findProperty(name);
+		return own != null ? own.toString() : prop(project, name);
+	}
+
 	@Override
 	public void apply(Project project) {
 		project.getPluginManager().apply(JavaPlugin.class);
@@ -33,12 +42,15 @@ public class ModPlugin implements Plugin<Project> {
 		// icon path carry that name; the project folders, packages and tasks keep the project's internal "oldfaithful".
 		// A mod of the Fixed edition only (`oldfaithful_edition=fixed` in its gradle.properties) is Old Faithful's, so
 		// its public name stays oldfaithful-*, with Old Faithful's icon, version and links (docs/release.md > Names).
-		boolean fixedEdition = "fixed".equals(project.findProperty("oldfaithful_edition"));
-		String publicName = fixedEdition ? "oldfaithful" : "purefaithful";
+		// One of Still Faithful's (`oldfaithful_edition=still`) is stillfaithful-*, likewise with that edition's own.
+		Object edition = project.findProperty("oldfaithful_edition");
+		boolean fixedEdition = "fixed".equals(edition);
+		boolean stillEdition = "still".equals(edition);
+		String publicName = fixedEdition ? "oldfaithful" : stillEdition ? "stillfaithful" : "purefaithful";
 		String modId = project.getName().replaceFirst("^oldfaithful-", publicName + "-");
-		String props = fixedEdition ? "fixed_" : "";
+		String props = fixedEdition ? "fixed_" : stillEdition ? "still_" : "";
 
-		project.setVersion(prop(project, fixedEdition ? "fixed_edition_version" : "oldfaithful_version"));
+		project.setVersion(editionProp(project, fixedEdition ? "fixed_edition_version" : stillEdition ? "still_edition_version" : "oldfaithful_version"));
 
 		DependencyHandler deps = project.getDependencies();
 		deps.add("compileOnly", project.files(mc.getNamedJar()));
@@ -70,7 +82,7 @@ public class ModPlugin implements Plugin<Project> {
 		// fabric.mod.json gets the version and the public links; every jar carries our licence and the icon.
 		project.getTasks().named(main.getProcessResourcesTaskName(), ProcessResources.class, t -> {
 			Map<String, String> tokens = Map.of("version", project.getVersion().toString(),
-					"repo", prop(project, props + "release_repo"), "homepage", prop(project, props + "release_homepage"));
+					"repo", editionProp(project, props + "release_repo"), "homepage", editionProp(project, props + "release_homepage"));
 			t.getInputs().property("tokens", tokens);
 			t.filesMatching("fabric.mod.json", f -> f.expand(tokens));
 			t.from(root.file("LICENSE"), c -> c.rename(n -> "LICENSE_" + modId));

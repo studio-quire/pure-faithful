@@ -711,6 +711,45 @@ def silvers_section():
             f'blue.</p>{"".join(rows)}</section>')
 
 
+# Still Faithful's seal (2026-11-02): the family's β seal with Old Faithful's silver rim and β, in a third colour.
+# Each: (key, name, top hue, bottom hue, why). Same luminance as Pure's, so the three sit together.
+STILLS = [("a", "Dusk violet", 266, 266, "Chosen (2026-11-02). Violet, the hour smooth dusk is about; clearly apart from Pure's blue and Old's green."),
+          ("b", "Twilight", 335, 250, "The seal's water as the sky after sunset: rose at the top, falling to indigo. Dusk, literally."),
+          ("c", "Rose", 340, 340, "A muted rose: warm and soft, as it might have been."),
+          ("d", "Amber", 36, 36, "The placeholder, for comparison: warm gold, but orange is our house colour."),
+          ("e", "Midnight", 232, 232, "A deep night blue, darker than Pure's; quiet, but close to Pure at 32 px.")]
+STILL_SILVER = (206, 208, 208)
+
+
+def still_seal(top_hue, bottom_hue, sat=0.5):
+    top, bottom, _ = BETA_PURE
+    t, b = matched(top_hue, sat, top), matched(bottom_hue, sat * 1.05, bottom)
+    if top_hue == 232:
+        t, b = matched(232, 0.45, (52, 96, 170)), matched(232, 0.5, (20, 34, 78))
+    shadow = tuple(round(v * 255) for v in colorsys.hls_to_rgb(bottom_hue / 360, 0.11, 0.5))
+    return c07_beta((t, b, STILL_SILVER), glyph_tint=STILL_SILVER, shadow=shadow)
+
+
+def stills_section():
+    def trio(src, size, bg):
+        return (f'<div class="cell {bg}"><div class="duo">'
+                f'<img src="07-beta.png" width="{size}" height="{size}" alt="">'
+                f'<img src="07-old-c-s3.png" width="{size}" height="{size}" alt="">'
+                f'<img src="{src}" width="{size}" height="{size}" alt=""></div></div>')
+    rows = []
+    for key, name, _, _, why in STILLS:
+        src = f"07-still-{key}.png"
+        mark = " pick" if key == "a" else (" ref" if key == "d" else "")
+        rows.append(f'<div class="green{mark}"><span class="tag">07-still-{key} &middot; {html.escape(name)}: '
+                    f'{html.escape(why)}</span><div class="row">{trio(src, 32, "dark")}{trio(src, 32, "light")}'
+                    f'<div class="cell dark m"><img src="{src}" width="64" height="64" alt=""></div>'
+                    f'<div class="cell modrinth"><img class="mr" src="{src}" width="96" height="96" alt=""></div>'
+                    f'</div></div>')
+    return ('<section class="card chosen" id="c07-still"><h2><span class="num">07</span>Still Faithful</h2>'
+            '<p>The family seal in a third colour, with Old Faithful&#x27;s silver rim and β. Each row shows Pure, Old and '
+            f'Still side by side at Prism&#x27;s 32 px, then Still alone at 64 and Modrinth&#x27;s 96.</p>{"".join(rows)}</section>')
+
+
 GREEN_PICK = "b"
 GREEN_WHY = ("Recommended: b, Jade. It reads as green at 32 px on either background, yet stays cool enough to sit "
              "beside Pure's blue as its sibling; c and d drift toward a generic green.")
@@ -760,11 +799,12 @@ def page(entries, has_current):
                         f'<div class="row">{imgs("00-current.png")}</div></section>')
     cards.insert(0, greens_section())
     cards.insert(0, silvers_section())
+    cards.insert(0, stills_section())
     grid = "".join(f'<figure><img src="{num}-{slug}.png" width="32" height="32" alt=""><figcaption>{num}</figcaption></figure>'
                    for num, slug, *_ in entries)
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pure Faithful icons</title>
+<title>Faithful icons</title>
 <style>
 :root {{ --ink:#2a3346; --soft:#6b7489; --line:#dfe4ec; }}
 * {{ box-sizing:border-box; }}
@@ -802,7 +842,7 @@ figure {{ margin:0; display:grid; justify-items:center; gap:4px; }}
 figcaption {{ font:12px ui-monospace, Consolas, monospace; color:#b9bfca; }}
 </style></head>
 <body><main>
-<h1>Pure Faithful icons</h1>
+<h1>Faithful icons</h1>
 <p class="sub">Twelve candidates, each with a number to name it by.</p>
 <div class="grid">{grid}</div>
 <div class="legend"><span>Prism 32 px, dark and light</span><span>64 px, dark and light</span><span>Modrinth 96 px</span></div>
@@ -823,6 +863,8 @@ def main(argv=None):
         entries.append((num, slug, name, idea, old is not None))
     for key, hue, _ in BETA_GREENS:
         c07_beta(beta_green(hue)).image().save(out / f"07-old-{key}.png", optimize=True)
+    for key, _, top_hue, bottom_hue, _ in STILLS:
+        still_seal(top_hue, bottom_hue).image().save(out / f"07-still-{key}.png", optimize=True)
     for key, _, silver, shadow in SILVERS:
         silver_seal(silver, shadow).image().save(out / f"07-old-c-{key}.png", optimize=True)
     # The chosen Pure Faithful icon at the release's sizes: Prism's instance icon (128, as purefaithful.png), the
@@ -838,6 +880,10 @@ def main(argv=None):
     old = silver_seal(*next((silver, shadow) for key, _, silver, shadow in SILVERS if key == "s3")).image()
     for size in (32, 64, 128, 256, 512):
         old.resize((size, size), Image.NEAREST).save(final / f"oldfaithful-{size}.png", optimize=True)
+    # Still Faithful's: dusk violet (07-still-a), the user's pick (2026-11-02).
+    still = still_seal(*next((t, b) for key, _, t, b, _ in STILLS if key == "a")).image()
+    for size in (32, 64, 128, 256, 512):
+        still.resize((size, size), Image.NEAREST).save(final / f"stillfaithful-{size}.png", optimize=True)
     current = next((p for p in (ROOT / "prism" / "release" / n for n in ("purefaithful.png", "oldfaithful.png"))
                     if p.exists()), None)
     if current:

@@ -33,7 +33,8 @@ Key:
 - **Impact**: how much players notice: high (most players, or loses their work), mid (many, or a regular annoyance),
   low (few, or cosmetic and rare).
 - In the table, **fixed** means in Pure Faithful (so in Old Faithful too); **fixed (OF)** means in Old Faithful's
-  `oldfaithful-fixes` (or, for #3, `oldfaithful-lighting`).
+  `oldfaithful-fixes` (or, for #3, `oldfaithful-lighting`). **built (SF)** means in Still Faithful's own mod (`stillfaithful-polish`, released
+  from 0.1.0).
 
 ## Ranked summary
 
@@ -42,35 +43,35 @@ Key:
 | 1 | A chunk that fails to load is silently regenerated, erasing what was built there | bug | Pure | high | fixed |
 | 2 | Chunk saves overwrite in place, and an oversized chunk is silently never saved | bug | Pure | high, rare | fixed |
 | 3 | Lighting errors: generated lava lights nothing; dark pockets under overhangs and at chunk edges | bug | OF | mid | fixed (OF) |
-| 4 | Farm animals despawn: pens empty while you're away (all but tamed wolves) | ask | SF | high | T |
+| 4 | Farm animals despawn: pens empty while you're away (all but tamed wolves) | ask | SF | high | built (SF) |
 | 5 | Multiplayer ghost blocks: a break the server refuses for distance is corrected only 4 s later | bug | OF | low-mid (MP) | fixed (OF) |
-| 6 | Dusk and dawn: every step of daylight rebuilds the whole view (stutter, stepped darkening) | ask (speed, looks) | SF | mid-high | T |
+| 6 | Dusk and dawn: every step of daylight rebuilds the whole view (stutter, stepped darkening) | ask (speed, looks) | SF | mid-high | built (SF) |
 | 7 | Grey sky while an inventory or any container is open | bug | OF | mid | fixed (OF) |
 | 8 | Tools' last use: the block drops nothing (multiplayer: everything; single player: leaves cut with shears) | bug | OF | mid | fixed (OF) |
 | 9 | Wooden slabs need a pickaxe to drop | bug | OF | mid | fixed (OF) |
 | 10 | Wrong tools for many blocks (axes slow on crafting tables, fences, doors; pickaxes on furnaces, rails...) | bug | OF | mid | fixed (OF) |
 | 11 | Furnace eats the lava bucket | bug | OF | mid | fixed (OF) |
-| 12 | Boats break on bumping into things at speed | ask | SF | mid | T |
-| 13 | Stairs drop their material (wood stairs: a plank; cobblestone stairs: one cobblestone) | ask | SF | mid | T |
-| 14 | Autosave every 2 seconds on the game thread: a hitch every 40 ticks | ask (speed) | SF | mid | T |
+| 12 | Boats break on bumping into things at speed | ask | SF | mid | built (SF) |
+| 13 | Stairs drop their material (wood stairs: a plank; cobblestone stairs: one cobblestone) | ask | SF | mid | built (SF) |
+| 14 | Autosave every 2 seconds on the game thread: a hitch every 40 ticks | ask (speed) | SF | mid | built (SF) |
 | 15 | Multiplayer mob jitter: the client runs its own physics on remote mobs, on top of the server's positions | bug | OF | mid (MP) | fixed (OF) |
 | 16a | Multiplayer: a player who teleports or comes through a portal stays invisible to players already there | bug | OF | mid (MP) | fixed (OF) |
 | 16b | Multiplayer: after a /tp or a fast move, chunks arrive row by row, not nearest first: seconds over air | bug (order), ask (holding still) | OF / SF | low-mid (MP) | order fixed (OF); lasting holes L |
 | 17 | Advanced OpenGL: chunks flicker out of view | bug | OF | mid | L |
 | 18 | Screenshots fail after the window is enlarged | bug | Pure | mid now | fixed |
 | 19 | Water flowing down destroys torches, rails and redstone without dropping them | bug | OF | low-mid | fixed (OF) |
-| 20 | Lava lingers without its source; water sources never form above water | ask | SF | low-mid | T |
+| 20 | Lava lingers without its source; water sources never form above water | ask | SF | low-mid | built (SF) |
 | 21 | Far Lands | quirk | none | low-mid | L |
 | 22 | Jitter and stretched textures far from the origin (float precision) | bug | OF | low-mid | L |
 | 23 | Piston crashes: out-of-range data crashes; the piston hunt found one in normal play (#53) | bug | OF | low | T |
-| 24 | Player-placed leaves decay once a log or leaves near them is broken | ask | SF | low-mid | T |
+| 24 | Player-placed leaves decay unless a log is within 4 | ask | SF | low-mid | built (SF) |
 | 25 | Slimes don't split when killed by a big hit | bug | OF | low | fixed (OF) |
 | 26 | Mobs that wake you can reach you through a wall | bug | OF | low-mid | fixed (OF) |
 | 27 | Falling through the boat when getting out (boats whose top is just under y 64, 32, 16...) | bug | OF | low-mid | fixed (OF) |
 | 28 | Sleeping view: listed as turned the wrong way; traced, the first-person view is the bed's own and ignores the mouse | not found | none | low | T |
 | 29 | Saddled pigs don't drop the saddle | bug | OF | low | fixed (OF) |
 | 30 | Fences: dark bottom face; hitbox too big (the "smart farm" trick) | bug, ask | OF / SF | low | fixed (OF): the face; hitbox L |
-| 31 | Minecarts: stopped by items and arrows; a slip in cart-on-cart collisions | bug, ask | OF / SF | low-mid | fixed (OF): items; the slip T |
+| 31 | Minecarts: stopped by items and arrows; a slip in cart-on-cart collisions | bug, ask | OF / SF | low-mid | fixed (OF): items; the slip built (SF) |
 | 33 | Crash on a slab or dye item with a bad data value | bug | OF | low | fixed (OF) |
 | 34 | Small visual bugs (list in the entry) | bug, ask | OF / SF | low | fixed (OF): four; the rest T or L |
 | 35 | Eating at full health wastes the food | ask | SF | low | L |
@@ -185,7 +186,8 @@ loaded); `canDespawn()` is true for every mob except a
 tamed wolf (`WolfEntity`). So penned cows, pigs (saddled ones too), sheep and chickens disappear whenever the player
 wanders off. Beta 1.8 stopped passive mobs despawning. Players rebuilt farms around this for years; whether it's a bug
 or beta's design is the user's call (a fix: passive mobs never despawn, or only naturally spawned ones away from
-players' builds; Beta 1.8's way pairs with its changed animal spawning).
+players' builds; Beta 1.8's way pairs with its changed animal spawning). **Built in Still Faithful** (2026-11-02,
+`animals.keepTended`): animals a player has dealt with stay (`docs/still-faithful.md` says what counts).
 
 ### 5. Ghost blocks in multiplayer (T)
 `ServerPlayNetworkHandler.handlePlayerAction`: a start or finish of mining more than 6 blocks (squared distance 36)
@@ -205,7 +207,10 @@ and with a far view the darkening sweeps across over seconds), and the light cha
 the cycle smooth with no chunk updates (a lightmap). Fix: apply sky brightness at draw time (a lightmap or a
 per-vertex sky term), so no rebuild is needed. It changes how dusk looks (smooth instead of stepped), so not a pure
 speed win: the user's call, Fixed edition, possibly a toggle. Interaction: phase 4 (chunk building throughput; the
-vsync chunk budget).
+vsync chunk budget). **Built in Still Faithful** (2026-11-02, `sky.dusk`): light applied when the chunks are
+drawn, exactly beta's at each step (checked pixel by pixel), no rebuilds; needs OpenGL 2.0. Smooth by default, its fog following
+the terrain (the user's call after playing both, 2026-11-03); stepped (beta's steps, the whole view at once) or beta's
+rebuild as choices.
 
 ### 7. Grey sky while a container is open (T)
 `HandledScreen.render` ends with `glEnable(GL_LIGHTING)` (and depth test). The next frame `GameRenderer.renderFrame`
@@ -285,7 +290,8 @@ client undoes a change the server hasn't confirmed, `ClientWorld`'s block resets
 same.
 Harvest, possibly clear enough to fix (not changed): glowstone needs a pickaxe to drop at all since Beta 1.6.6 made it
 stone material (so things could be placed on it); 1.0.0-RC1 put it back to glass material and said "a pickaxe is no
-longer needed".
+longer needed". **Built in Still Faithful** (2026-11-02, `glowstone.anyTool`): harvestable by anything,
+glowstone staying stone material.
 
 ### 11. Furnace eats the lava bucket (T)
 `FurnaceBlockEntity.tick` decrements the fuel stack and nulls it at zero; a lava bucket leaves no empty bucket.
@@ -296,19 +302,23 @@ bucket: the bucket) leaves it in the fuel slot.
 ### 12. Boats break on collisions (T, ask)
 `BoatEntity.tick`: any horizontal collision above 0.15 speed kills the boat and drops three planks and two sticks.
 Players hated it, but it was how beta's boats worked, and later versions changed it on purpose. Options: keep, toggle
-(default beta), or fix. The user's call.
+(default beta), or fix. The user's call. Traced further (2026-11-02): `Entity.move` zeroes the velocity of a blocked
+axis, so the speed tested is what's left along the free axis: a boat sliding along a shore or an item at over 0.15
+breaks, while one driven head-on into a wall at any speed doesn't (beta players learnt to land head-on).
+**Built in Still Faithful** (2026-11-02, `boats.sturdy`, `boats.handling`; `docs/still-faithful.md`).
 
 ### 13. Stairs drop their material (T, ask)
 `StairsBlock.getDroppedItemId/Count` delegate to the base block: wooden stairs drop a plank, cobblestone stairs one
 cobblestone, from a recipe of six blocks for four stairs. Later versions drop the stairs. Bug or beta design: the
-user's call.
+user's call. **Built in Still Faithful** (2026-11-02, `blocks.stairsDropStairs`).
 
 ### 14. Autosave every 2 seconds (T, ask, speed)
 `World.tick` calls `saveWithLoadingDisplay(false, null)` when the world time is a multiple of `saveInterval` (40
 ticks): level.dat plus up to 24 dirty chunks (`ChunkCache.save`), compressed and written on the game thread. A
 periodic hitch while building or exploring. Moving saves off the thread or spacing them out changes timing and the
 crash-loss window, so it isn't a pure speed win (phase 4 didn't take it). With entry 2 fixed, a longer interval is
-safer. The user's call.
+safer. The user's call. **Built in Still Faithful** (2026-11-02, `saves.backgroundAutosave`): the same saves at the
+same moments, compressed and written by a thread of their own, on top of the saves mod (`docs/still-faithful.md`).
 
 ### 15. Multiplayer mob jitter (T)
 `LivingEntity.tickMovement` runs on the client for remote mobs. `interpolateOnly` (set in
@@ -406,7 +416,8 @@ neither changes nor schedules another tick, so flowing lava cut off from its sou
 next to it changes. Water: the check meant to make a new source above still water reads the current block's data
 (`world.getBlockMeta(x, y, z) == 0`, never true for flowing water there) instead of the block below, so sources only
 form over solid ground. Both are slips in the code, but both shape builds players made (lava lighting, water
-setups), so: the user's call; toggles likely.
+setups), so: the user's call; toggles likely. **Built in Still Faithful** (2026-11-02, `liquids.lavaThins`,
+`liquids.waterSources`): lava thins every time, waiting four times longer on beta's refusals, as later versions do.
 
 ### 21. Far Lands (L, quirk)
 Terrain noise overflows past about 12.5 million blocks out. Part of beta's lore: a toggle, default as beta. Beta 1.8
@@ -434,9 +445,12 @@ and two ways pistons lose blocks (#54, #67).
 
 ### 24. Player-placed leaves decay (T, ask)
 Leaves decay only once bit 8 of their data is set (`LeavesBlock.onTick`). The bit is set on leaves within 4 of a
-broken log (`LogBlock.onBreak`) and within 1 of any broken leaves block (`LeavesBlock.onBreak`), and placed leaves
-carry only the item's 0-3. So placed leaves are safe until a log or leaves block near them is broken, and then decay
-if no log is within 4. Beta 1.8 added a no-decay bit. Beta's design or a bug: the user's call (Still Faithful).
+broken log (`LogBlock.onBreak`) and within 1 of any broken leaves block (`LeavesBlock.onBreak`), and placed leaves get
+it at once: `LeavesBlockItem.getPlacementMetadata` returns `meta | 8` (corrected 2026-11-02, seen in the running game:
+placed birch leaves have data 10). So placed leaves decay on their next random tick unless a log is within 4. Beta
+1.8 added a no-decay bit. Beta's design or a bug: the user's call, Still Faithful's.
+**Built in Still Faithful** (2026-11-02, `leaves.placedStay`, `docs/still-faithful.md`): placed leaves get bit 4
+instead, and never decay.
 
 ### 25. Slimes don't split on overkill (T)
 `SlimeEntity.markDead` splits only when `health == 0`; a hit that takes health below zero kills a big slime outright.
@@ -506,7 +520,13 @@ method, so an item floating in a boat's path is a wall to it too, and boats brea
 same slip, left as beta for now since it touches #12's question. In the cart-on-cart branch the check meant to read the other cart's motion mixes `velocityZ` with `prevX` (a
 position) where `velocityX` belongs. Partly traced: the item push is plain; what the slip does to two-cart behaviour,
 including the booster trick players rely on, isn't worked out. Items: bug. The slip: the user's call once it's
-understood. Also: `MinecartEntity.animateHurt` (client) grows the wobble as `strength + strength * 10`, where the
+understood. Traced 2026-11-02 (`docs/still-faithful.md` > Open): the gate it breaks never fires on east-west track
+and fires almost everywhere on north-south and curved track (walling carts off from each other there); boosters come
+from the normal branch, so the slip switches them off on most N-S track. **Built in Still Faithful** (2026-11-02, `minecarts.cartCollisions`, the
+user's call): the rail under the cart decides, so every axis behaves as east-west track did (`docs/still-faithful.md` >
+Carts meeting carts). The gate does fire for carts side by side on parallel east-west tracks, as meant; and a booster
+pair that keeps meeting overflows its stored speed after about 1,100 ticks, which beta's own guards end harmlessly
+(the pair stops). Also: `MinecartEntity.animateHurt` (client) grows the wobble as `strength + strength * 10`, where the
 server adds `amount * 10`, and prints "Animating hurt" to stdout on every hit. Cosmetic and log noise only.
 
 ### 32 to 34
@@ -534,7 +554,7 @@ server adds `amount * 10`, and prints "Animating hurt" to stdout on every hit. C
     aims the catch (and a hooked mob) at `owner.y`, which is the feet on a server (`ServerPlayerEntity` has eye height
     0) but the eyes in single player, 1.62 higher: from about 12 blocks out the fish sails over your head. Aimed at the
     feet in both now, as a server always did.
-  - Left, judgement calls: bow held like an item (third person; beta has no bow pose, Beta 1.8 added one with the
+  - Left, judgement calls (built in Still Faithful, 2026-11-02: the bow and dropped item sizes): bow held like an item (third person; beta has no bow pose, Beta 1.8 added one with the
     draw); torches at full brightness (an explicit check in `renderTorch`, deliberate); dropped item sizes (non-cube 3D
     blocks drop at twice the size, `ItemRenderer.render`'s `isFullCube` test: a slip, but fixing it visibly changes
     familiar drops, so the user's call); clouds through blocks (design); entities unlit in the void
@@ -580,7 +600,8 @@ Going down stairs the player is briefly airborne, so distance piles up silently;
 plays every tick until the counter catches up: a rattle of steps at the bottom. Fix: when no step can play,
 keep `nextStepSoundDistance` level with the distance walked, so the backlog never builds. Risk: none.
 **Fixed in Old Faithful** (2026-11-02, `sound.stepsAfterFalls`): after each move, the next step is kept within one of
-the distance walked, so a landing owes at most one step.
+the distance walked, so a landing owes at most one step. Steps filling in the short drops down a staircase (Still Faithful) were
+discussed and left out (the user, 2026-11-03).
 
 ### 39. The cursor's item draws behind the player and labels (T)
 Noticed by the user (2026-11-02). `HandledScreen.render` draws the stack held on the cursor at z +32 with depth
@@ -881,7 +902,9 @@ spawner shows a cow only where both sides have the fix, a pig elsewhere, and no 
 `SlimeEntity.canSpawn` replaces `LivingEntity.canSpawn` without calling it, so slimes skip the collision, entity and
 fluid tests every other mob keeps: a size-4 slime (2.4 blocks wide) spawns wherever two blocks of air sit on a solid
 block, so in walls (and suffocates, splitting) and inside other slimes. A clear slip (OF), but slime farms are built on
-today's rates: a switch defaulting to beta at least, or Still Faithful's.
+today's rates: a switch defaulting to beta at least, or Still Faithful's. Traced further (2026-11-02, `docs/still-faithful.md` > Open): slimes spawn below y 16; with the
+room check, the size-4 spawns most farm output comes from would fail in the usual 2-high layers (about 80% fewer
+slimeballs); recommendation: leave as beta.
 
 ### 64. A wrong extra block west and north of 0, 0 (T)
 `World.isBoxSubmergedInFluid` subtracts one from the box's lowest x, y and z when they're negative, though
@@ -915,7 +938,8 @@ stood beside it; without the repair the server stops.
 - Generation, left as beta because fixing changes seeds (Still Faithful at most): the Nether's decoration isn't seeded
   (`NetherChunkGenerator.decorate` never reseeds, so glowstone, fire and lava falls depend on load order); clay is placed
   8 blocks from the water it tested (`ClayOreFeature`), which is why beta's clay sits in beach sand; climate is sampled
-  off the noise lattice at chunk seams (about a tenth of a block); the spawner's spawn area is centred on its corner.
+  off the noise lattice at chunk seams (about a tenth of a block); the spawner's spawn area is centred on its corner. The spawner one isn't generation (it runs in play and changes no seed); traced further 2026-11-02,
+with recommendations, in `docs/still-faithful.md` > Open.
 
 ### 67. Falling sand deletes sand it passes into (T, seen)
 `FallingBlockEntity.tick` removes the block of its own kind at its position on every tick, not only the first (where

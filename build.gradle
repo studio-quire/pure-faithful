@@ -188,3 +188,5 @@ tasks.register('serverPackageZip', Zip) {
 }
 
 apply from: 'gradle/release.gradle'
+// Still Faithful, the third edition (private for now): its pack and dev instance, where its files exist.
+if (file('gradle/still-faithful.gradle').isFile()) apply from: 'gradle/still-faithful.gradle'

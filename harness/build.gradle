@@ -41,6 +41,11 @@ def speedMod = project(':oldfaithful-speed').tasks.named('remapJar')
 // The Fixed edition's own mods join the server test and the client audits, which check that every mixin applies;
 // `clientStartupTestFixed` runs them in a world.
 def fixedMods = fixedModProjects.collect { project(it).tasks.named('remapJar') }
+// Still Faithful's own mod, where present (settings.gradle): it joins the server test and the client audits too, and
+// `clientStartupTestStill` runs it in a world with its test-only checks (its `selftest` source set, docs/still-faithful.md).
+def stillModProjects = [':oldfaithful-polish'].findAll { findProject(it) != null }
+stillModProjects.each { evaluationDependsOn(it) }
+def stillMods = stillModProjects.collect { project(it).tasks.named('remapJar') }
 
 tasks.register('serverTest', oldfaithful.gradle.ServerTestTask) {
     group = 'verification'
@@ -48,7 +53,7 @@ tasks.register('serverTest', oldfaithful.gradle.ServerTestTask) {
     gameJar = mc.serverJar
     intermediaryMappings = mc.intermediaryMappings
     loaderClasspath.from(configurations.loaderRuntime)
-    mods.from(testedMods, fixedMods)
+    mods.from(testedMods, fixedMods, stillMods)
     runDir = rootProject.layout.projectDirectory.dir('local/run/server-test')
     if (gameJava.isPresent()) javaExecutable = gameJava
 }
@@ -73,7 +78,7 @@ tasks.register('clientAudit', oldfaithful.gradle.ClientAuditTask) {
     gameJar = mc.clientJar
     intermediaryMappings = mc.intermediaryMappings
     loaderClasspath.from(configurations.loaderRuntime)
-    mods.from(testedMods, speedMod, fixedMods)
+    mods.from(testedMods, speedMod, fixedMods, stillMods)
     runDir = rootProject.layout.projectDirectory.dir('local/run/client-audit')
     if (gameJava.isPresent()) javaExecutable = gameJava
     // Kept between runs: the first run downloads every sound (about 44 MB) from Mojang, later ones find them present.
@@ -174,7 +179,7 @@ tasks.register('clientAuditSdl', oldfaithful.gradle.ClientAuditTask) {
     gameJar = mc.clientJar
     intermediaryMappings = mc.intermediaryMappings
     loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
-    mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods)
+    mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods, stillMods)
     runDir = rootProject.layout.projectDirectory.dir('local/run/client-audit-sdl')
     if (gameJava.isPresent()) javaExecutable = gameJava
     extraJvmArgs.add("-Doldfaithful.selftest.soundsGameDir=${rootProject.file('local/cache/selftest-sounds')}")
@@ -309,6 +314,39 @@ if (!fixedMods.isEmpty()) {
         if (gameJava.isPresent()) javaExecutable = gameJava
     }
 }
+// Still Faithful (the third edition): the same with Old Faithful's mods and its own, then its changes checked in the
+// world by its test-only mod (WorldCheck, from oldfaithful-polish's `selftest` source set; docs/still-faithful.md).
+if (!stillMods.isEmpty() && !fixedMods.isEmpty()) {
+    def stillSelftest = project(':oldfaithful-polish').tasks.named('selftestRemapJar')
+    tasks.register('clientStartupTestStill', oldfaithful.gradle.ClientStartupTask) {
+        group = 'verification'
+        description = "The start-up test with Still Faithful's mods, and its changes checked in the running world."
+        dependsOn extractLwjgl3Natives
+        gameJar = mc.clientJar
+        intermediaryMappings = mc.intermediaryMappings
+        loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
+        mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods, stillMods,
+                stillSelftest.flatMap { it.output })
+        natives = lwjgl3NativesDir
+        soundsGameDir = rootProject.layout.projectDirectory.dir('local/cache/selftest-sounds')
+        privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
+        runDir = rootProject.layout.projectDirectory.dir('local/run/client-startup-still')
+        oldFaithful = findProject(':oldfaithful-options') != null
+        // Smooth dusk's picture comparisons (DuskCheck) take a few minutes; -Pstill.duskFull runs all four graphics modes.
+        def duskFull = providers.gradleProperty('still.duskFull').isPresent()
+        timeoutSeconds = duskFull ? 900 : 420
+        extraJvmArgs = ["-Doldfaithful.selftest.edition=${project(':oldfaithful-polish').property('still_release_name')}:stillfaithful-polish".toString(),
+                        "-Doldfaithful.selftest.stallMs=${(duskFull ? 860 : 390) * 1000}".toString(),
+                        "-Doldfaithful.selftest.duskFull=${duskFull}".toString()]
+        // -Pstill.beta: every Still Faithful switch off, so each check must find beta's behaviour instead.
+        if (providers.gradleProperty('still.beta').isPresent()) {
+            configs.put('stillfaithful-polish.properties', ['blocks.stairsDropStairs', 'leaves.placedStay', 'glowstone.anyTool',
+                    'liquids.lavaThins', 'liquids.waterSources', 'render.droppedItemSize', 'render.bowPose', 'boats.sturdy',
+                    'boats.handling', 'minecarts.cartCollisions', 'animals.keepTended', 'saves.backgroundAutosave'].collect { it + '=false' }.join('\n') + '\nsky.dusk=beta\n')
+        }
+        if (gameJava.isPresent()) javaExecutable = gameJava
+    }
+}
 // Pictures of the real game for the site (SceneShot, docs/release.md): Old Faithful's mods, a 1440x900 hidden
 // window, lava lying in caves near the spawn of -PsceneSeed (default 7373), shots in local/run/scene-shot/shots/.
 if (!fixedMods.isEmpty()) {
@@ -332,6 +370,36 @@ if (!fixedMods.isEmpty()) {
         extraJvmArgs = ['-Dorg.prismlauncher.window.dimensions=1440x900', '-Doldfaithful.selftest.expectSize=1440x900',
                         "-Doldfaithful.selftest.scene=${runDirectory.dir('shots').asFile.absolutePath}",
                         "-Doldfaithful.selftest.sceneSeed=${providers.gradleProperty('sceneSeed').getOrElse('7373')}"]
+        if (gameJava.isPresent()) javaExecutable = gameJava
+    }
+}
+// Landscapes with Still Faithful's mods (its dusk), for its site page: -PsceneViews="x y z yaw pitch time;..." (SceneShot's
+// view mode) in a world of -PsceneSeed, shots in local/run/scene-shot-still/shots/.
+if (!fixedMods.isEmpty() && !stillMods.isEmpty()) {
+    tasks.register('sceneShotStill', oldfaithful.gradle.ClientStartupTask) {
+        group = 'oldfaithful'
+        description = 'Takes pictures of given views of a new world, unseen, with Still Faithful\'s mods.'
+        dependsOn extractLwjgl3Natives
+        gameJar = mc.clientJar
+        intermediaryMappings = mc.intermediaryMappings
+        loaderClasspath.from(configurations.loaderRuntime, bakedLwjgl.flatMap { it.output })
+        mods.from(testedMods, project(':oldfaithful-display').tasks.named('remapJar'), speedMod, fixedMods, stillMods)
+        natives = lwjgl3NativesDir
+        soundsGameDir = rootProject.layout.projectDirectory.dir('local/cache/selftest-sounds')
+        privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
+        def runDirectory = rootProject.layout.projectDirectory.dir('local/run/scene-shot-still')
+        runDir = runDirectory
+        oldFaithful = findProject(':oldfaithful-options') != null
+        windowRuns = false
+        def views = providers.gradleProperty('sceneViews').getOrElse('')
+        def seconds = 300 + 60 * Math.max(1, views.split(';').length)
+        timeoutSeconds = seconds
+        extraJvmArgs = ['-Dorg.prismlauncher.window.dimensions=1440x900', '-Doldfaithful.selftest.expectSize=1440x900',
+                        "-Doldfaithful.selftest.stallMs=${(seconds - 30) * 1000}".toString(),
+                        "-Doldfaithful.selftest.edition=${project(':oldfaithful-polish').property('still_release_name')}:stillfaithful-polish".toString(),
+                        "-Doldfaithful.selftest.scene=${runDirectory.dir('shots').asFile.absolutePath}".toString(),
+                        "-Doldfaithful.selftest.sceneViews=${views}".toString(),
+                        "-Doldfaithful.selftest.sceneSeed=${providers.gradleProperty('sceneSeed').getOrElse('31337')}".toString()]
         if (gameJava.isPresent()) javaExecutable = gameJava
     }
 }
@@ -365,9 +433,12 @@ if (findProject(':oldfaithful-fixes') != null) {
 // The release packs as they'll be published (docs/release.md): the start-up test on what's inside each pack's zip,
 // unpacked as Prism would lay it out: its libraries on the classpath, its natives extracted, its mods (with the
 // self-test mod beside them). `clientStartupTestPack` for Pure Faithful's, `clientStartupTestPackFixed` for Old
-// Faithful's. Prism itself and the instance files (components, icon, notes) aren't run here.
-[[task: 'clientStartupTestPack', pack: 'releasePack', key: 'pure', oldFaithful: false],
- [task: 'clientStartupTestPackFixed', pack: 'releasePackFixed', key: 'fixed', oldFaithful: true]].each { p ->
+// Faithful's, `clientStartupTestPackStill` for Still Faithful's (its title line and settings button checked; its own
+// changes are `clientStartupTestStill`'s). Prism itself and the instance files (components, icon, notes) aren't run here.
+[[task: 'clientStartupTestPack', pack: 'releasePack', key: 'pure', oldFaithful: false, name: 'Pure Faithful'],
+ [task: 'clientStartupTestPackFixed', pack: 'releasePackFixed', key: 'fixed', oldFaithful: true, name: 'Old Faithful'],
+ [task: 'clientStartupTestPackStill', pack: 'releasePackStill', key: 'still', oldFaithful: true, name: 'Still Faithful',
+  edition: 'Still Faithful:stillfaithful-polish']].each { p ->
     if (!rootProject.tasks.names.contains(p.pack)) return
     def packZip = rootProject.tasks.named(p.pack)
     def unpacked = tasks.register("${p.task}Unpack", Sync) {
@@ -383,7 +454,7 @@ if (findProject(':oldfaithful-fixes') != null) {
     def libraries = unpacked.map { fileTree(it.destinationDir) { include 'libraries/*.jar'; exclude 'libraries/*natives*.jar', 'libraries/intermediary-*.jar' } }
     tasks.register(p.task, oldfaithful.gradle.ClientStartupTask) {
         group = 'verification'
-        description = "The start-up test on what's in the ${p.key == 'pure' ? 'Pure Faithful' : 'Old Faithful'} release pack."
+        description = "The start-up test on what's in the ${p.name} release pack."
         dependsOn packNatives
         gameJar = mc.clientJar
         intermediaryMappings = layout.file(unpacked.map { fileTree(it.destinationDir) { include 'libraries/intermediary-*.jar' }.singleFile })
@@ -394,6 +465,7 @@ if (findProject(':oldfaithful-fixes') != null) {
         privateDesktop = rootProject.layout.projectDirectory.file('tools/private_desktop.py')
         runDir = rootProject.layout.projectDirectory.dir("local/run/client-startup-pack-${p.key}")
         oldFaithful = p.oldFaithful
+        if (p.edition) extraJvmArgs = ["-Doldfaithful.selftest.edition=${p.edition}".toString()]
         if (gameJava.isPresent()) javaExecutable = gameJava
     }
 }

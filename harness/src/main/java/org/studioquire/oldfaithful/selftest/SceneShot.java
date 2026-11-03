@@ -28,6 +28,12 @@ import org.lwjgl.opengl.GL11;
  * cave's air a few blocks off, looking at the lava, with the HUD and hand hidden, monsters away (peaceful); once the
  * view has built, the frame is read back and saved as {@code lava-<n>.png}, with where it was in {@code lava-<n>.txt}.
  * Nothing is built or placed: the scene is the world as generated.
+ *
+ * <p>With {@code -Doldfaithful.selftest.sceneViews="x y z yaw pitch time;..."} instead: landscapes from given places,
+ * no search. For each, the player is held with the eye at x+0.5, y, z+0.5 (x and z a block, y the eye's height),
+ * facing yaw and pitch, the time of day held at {@code time}, at the Far render distance; after
+ * {@code oldfaithful.selftest.sceneViewTicks} (default 900, for the far view to fill in) the frame is saved as
+ * {@code view-<n>.png}, with the view in {@code view-<n>.txt}.
  */
 public final class SceneShot {
 	public static final String OUT = System.getProperty("oldfaithful.selftest.scene");
@@ -35,6 +41,8 @@ public final class SceneShot {
 	public static final long SEED = Long.getLong("oldfaithful.selftest.sceneSeed", 7373L);
 	private static final int RADIUS = Integer.getInteger("oldfaithful.selftest.sceneRadius", 96);
 	private static final int SHOTS = Integer.getInteger("oldfaithful.selftest.sceneShots", 6);
+	private static final String VIEWS = System.getProperty("oldfaithful.selftest.sceneViews");
+	private static final int VIEW_TICKS = Integer.getInteger("oldfaithful.selftest.sceneViewTicks", 900);
 	private static final int SETTLE_TICKS = 100, HOLD_TICKS = 200;
 	private static final int LAVA = Block.LAVA.id, FLOWING_LAVA = Block.FLOWING_LAVA.id;
 
@@ -74,6 +82,7 @@ public final class SceneShot {
 		mc.options.hideHud = true;
 		mc.options.difficulty = 0;
 		ticks++;
+		if (VIEWS != null) return view(mc);
 		if (site < 0) {
 			if (ticks < SETTLE_TICKS) return false;
 			search(mc.world, (int) Math.floor(mc.player.x), (int) Math.floor(mc.player.z));
@@ -100,6 +109,43 @@ public final class SceneShot {
 				throw new java.io.UncheckedIOException(e);
 			}
 			site++;
+			held = 0;
+		}
+		return false;
+	}
+
+	private int view;
+
+	/** Landscape mode: the views in VIEWS one after another. */
+	private boolean view(Minecraft mc) {
+		String[] views = VIEWS.split(";");
+		if (view >= views.length) return true;
+		String[] v = views[view].trim().split("\\s+");
+		double x = Integer.parseInt(v[0]) + 0.5, y = Double.parseDouble(v[1]), z = Integer.parseInt(v[2]) + 0.5;
+		float yaw = Float.parseFloat(v[3]), pitch = Float.parseFloat(v[4]);
+		long time = Long.parseLong(v[5]);
+		mc.options.viewDistance = 0;
+		mc.world.setTime(time);
+		ClientPlayerEntity p = mc.player;
+		p.noClip = true;
+		p.velocityX = p.velocityY = p.velocityZ = 0;
+		p.fireTicks = 0;
+		p.health = 20;
+		p.setPositionAndAngles(x, y, z, yaw, pitch);
+		held++;
+		if (held == VIEW_TICKS) {
+			taken = false;
+			pending = new File(OUT, "view-" + view + ".png");
+		} else if (held > VIEW_TICKS && taken) {
+			String where = String.format(Locale.ROOT, "seed %d, camera at %d %.2f %d, yaw %.0f, pitch %.0f, time %d",
+					SEED, (int) Math.floor(x), y, (int) Math.floor(z), yaw, pitch, time);
+			results.pass("scene: view-" + view + ".png, " + where);
+			try {
+				java.nio.file.Files.write(new File(OUT, "view-" + view + ".txt").toPath(), (where + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			} catch (java.io.IOException e) {
+				throw new java.io.UncheckedIOException(e);
+			}
+			view++;
 			held = 0;
 		}
 		return false;

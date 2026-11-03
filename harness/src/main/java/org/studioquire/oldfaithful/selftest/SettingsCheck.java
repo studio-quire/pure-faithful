@@ -35,6 +35,9 @@ import org.studioquire.oldfaithful.selftest.mixin.ScreenAccessor;
  * so the harness builds without it.
  */
 final class SettingsCheck {
+	/** The settings button's label: the edition's name (Old Faithful's, or another edition's run names its own). */
+	private static final String BUTTON = (StartupCheck.EDITION != null ? StartupCheck.EDITION.split(":")[0] : "Old Faithful") + "...";
+
 	private static final String PKG = "org.studioquire.oldfaithful.options.settings.";
 	private static final int[][] WINDOWS = {{640, 480}, {854, 480}, {1920, 1080}};
 
@@ -105,7 +108,7 @@ final class SettingsCheck {
 	private Screen openSettings(Minecraft mc) {
 		OptionsScreen options = new OptionsScreen(null, mc.options);
 		mc.setScreen(options);
-		press(options, button(options, "Old Faithful..."));
+		press(options, button(options, BUTTON));
 		return mc.currentScreen;
 	}
 
@@ -249,7 +252,7 @@ final class SettingsCheck {
 		OptionsScreen options = new OptionsScreen(null, mc.options);
 		mc.setScreen(options);
 		int w = options.width, h = options.height;
-		ButtonWidget ours = button(options, "Old Faithful...");
+		ButtonWidget ours = button(options, BUTTON);
 		ButtonWidget video = null, controls = null, done = null;
 		for (ButtonWidget b : buttons(options)) {
 			if (b.id == 101) video = b;
@@ -263,10 +266,10 @@ final class SettingsCheck {
 			ButtonWidget b = buttons(options).get(i);
 			betasInPlace &= b.x == w / 2 - 155 + i % 2 * 160 && b.y == h / 6 + 24 * (i >> 1);
 		}
-		results.check("Options: \"Old Faithful...\" above Video Settings on their pitch (" + ours.x + "," + ours.y + "), beta's buttons where beta put them",
+		results.check("Options: \"" + BUTTON + "\" above Video Settings on their pitch (" + ours.x + "," + ours.y + "), beta's buttons where beta put them",
 				ours.x == w / 2 - 100 && ours.y == h / 6 + 84 && ((ButtonWidgetAccessor) ours).oldfaithful$width() == 200 && betasInPlace);
 		press(options, ours);
-		results.check("\"Old Faithful...\" opens the settings screen (" + mc.currentScreen.getClass().getSimpleName() + ")",
+		results.check("\"" + BUTTON + "\" opens the settings screen (" + mc.currentScreen.getClass().getSimpleName() + ")",
 				mc.currentScreen.getClass().getName().equals(PKG + "SettingsScreen"));
 		return true;
 	}
@@ -277,7 +280,9 @@ final class SettingsCheck {
 		List<String> expected = new ArrayList<>();
 		if (loader.isModLoaded("oldfaithful-fixes")) expected.addAll(java.util.Arrays.asList("Blocks and Items...", "Mobs and Vehicles..."));
 		if (loader.isModLoaded("oldfaithful-fixes") || loader.isModLoaded("oldfaithful-lighting")) expected.add("Redstone and Lighting...");
-		if (loader.isModLoaded("oldfaithful-fixes")) expected.addAll(java.util.Arrays.asList("Looks and Sounds...", "Multiplayer..."));
+		if (loader.isModLoaded("oldfaithful-fixes")) expected.add("Looks and Sounds...");
+		if (loader.isModLoaded("stillfaithful-polish")) expected.add("Polish...");
+		if (loader.isModLoaded("oldfaithful-fixes")) expected.add("Multiplayer...");
 		expected.add(loader.isModLoaded("purefaithful-display") ? "Window and Mouse..." : "Game...");
 		expected.add("Done");
 		Screen top = openSettings(mc);
