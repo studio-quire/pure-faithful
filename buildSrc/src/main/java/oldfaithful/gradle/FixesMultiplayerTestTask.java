@@ -30,7 +30,9 @@ import org.gradle.api.tasks.TaskAction;
  * <p>
  * Server side, with raw clients (RawClient): #5 a refused break answered with the block; #16a a teleported player seen
  * by the one they joined; #16b the chunks after that teleport nearest first; #48 a sign edited in the same tick as
- * another change reaching another player; #49 a player who died told on respawn that what they saw is gone.
+ * another change reaching another player; #49 a player who died told on respawn that what they saw is gone; #58 an
+ * explosion's push sent to a player hurt a moment before; #60 a /tp in mid-fall landing without the fall; #61 a player
+ * standing where the clients see their eyes above water not drowned.
  */
 public abstract class FixesMultiplayerTestTask extends ClientStartupTask {
 	/** local/server-package/OldFaithful-server, as :serverPackage writes it. */
@@ -151,6 +153,9 @@ public abstract class FixesMultiplayerTestTask extends ClientStartupTask {
 		check(failures, side, "#16b: after the teleport, the first chunk sent is the one the player stands in", fixed, tp[1]);
 		check(failures, side, "#48: a sign edited in the same tick as another block change reaches another player", fixed, signEdit(port));
 		check(failures, side, "#49: a respawned player told that a player who left while they were dead is gone", fixed, respawn(port));
+		check(failures, side, "#58: an explosion a moment after a hit pushes the player", fixed, explosionPush(port));
+		check(failures, side, "#60: a player moved by /tp in mid-fall lands without the fall's damage", fixed, tpFall(server, port));
+		check(failures, side, "#61: a player whose eyes are above the water by the clients' measure doesn't drown", fixed, drowning(port));
 	}
 
 	/** {@code seen} must be {@code expected}: the fix's behaviour on a fixed server, beta's on the control. */
@@ -231,6 +236,64 @@ public abstract class FixesMultiplayerTestTask extends ClientStartupTask {
 			dier.stand(30, 50);
 			dier.respawn();
 			return dier.await(r -> r.id() == 29 && r.a() == leaverId, 3) != null;
+		}
+	}
+
+	/** #58: hurt, then within beta's half second of protection an explosion beside the player: is the push sent? */
+	private boolean explosionPush(int port) throws Exception {
+		try (RawClient c = new RawClient(port, "SkyBomber")) {
+			login(c);
+			c.stand(70, 50); // past the protection after joining, which counts the player's moves
+			c.chat("!oftest hurt");
+			c.stand(5, 50);
+			long t0 = System.nanoTime();
+			c.chat("!oftest boom");
+			int self = c.entityId();
+			RawClient.Received push = c.await(r -> r.id() == 28 && r.a() == self && r.at() > t0, 2);
+			getLogger().lifecycle("SkyBomber's velocity after the explosion: {}", push == null ? "none sent" : push.b() + " " + push.c() + " " + push.d());
+			return push != null && (push.b() != 0 || push.d() != 0);
+		}
+	}
+
+	/** #60: a 10-block fall begun, the console's /tp to another player, then a landing: did it hurt? */
+	private boolean tpFall(GameProcess server, int port) throws Exception {
+		try (RawClient faller = new RawClient(port, "SkyFaller"); RawClient lander = new RawClient(port, "SkyLander")) {
+			login(faller);
+			login(lander);
+			faller.stand(70, 50);
+			double[] p = faller.position();
+			// 20 blocks east, clear of the scenes at the spawn, then down 10.
+			for (int i = 1; i <= 20; i++) {
+				faller.move(p[0] + i, p[1], p[2], p[3], 0, 0, false);
+				Thread.sleep(50);
+			}
+			for (int i = 1; i <= 10; i++) {
+				faller.move(p[0] + 20, p[1] - i, p[2] - i, p[3], 0, 0, false);
+				Thread.sleep(50);
+			}
+			long t0 = System.nanoTime();
+			server.send("tp SkyFaller SkyLander");
+			Thread.sleep(500); // the client answers the teleport by itself
+			double[] q = faller.position();
+			faller.move(q[0], q[1], q[2], q[3], 0, 0, true);
+			faller.stand(20, 50); // the server sends health with the player's next moves
+			RawClient.Received hurt = faller.await(r -> r.id() == 8 && r.a() < 20 && r.at() > t0, 1);
+			getLogger().lifecycle("SkyFaller's health after landing from /tp: {}", hurt == null ? "unchanged" : hurt.a());
+			return hurt == null;
+		}
+	}
+
+	/** #61: standing in a pool whose surface lies between 1.62 and 1.74 above the feet, longer than air lasts. */
+	private boolean drowning(int port) throws Exception {
+		try (RawClient c = new RawClient(port, "SkySwimmer")) {
+			login(c);
+			c.chat("!oftest pool");
+			Thread.sleep(500);
+			long t0 = System.nanoTime();
+			c.stand(400, 50); // air lasts 300 of the player's ticks (one a move), then drowning hurts
+			RawClient.Received hurt = c.await(r -> r.id() == 8 && r.a() < 20 && r.at() > t0, 0.5);
+			getLogger().lifecycle("SkySwimmer's health after 20 s in the pool: {}", hurt == null ? "unchanged" : hurt.a());
+			return hurt == null;
 		}
 	}
 

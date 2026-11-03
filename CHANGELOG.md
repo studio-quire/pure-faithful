@@ -4,6 +4,15 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.3 (2026-11-02)
+
+Bug fixes.
+
+- Fixed a rare server crash involving pistons near the edge of the loaded area.
+- Saves: a spawner set to something that isn't a mob, which only an edited world can hold, crashed the game (or
+  stopped the server) whenever a player came near. It's set back to a pig spawner when its chunk loads, and reported
+  with the other repairs.
+
 ## 0.1.2 (2026-11-02)
 
 Released with the first Old Faithful, which carries it. Nothing changes for Pure Faithful players.

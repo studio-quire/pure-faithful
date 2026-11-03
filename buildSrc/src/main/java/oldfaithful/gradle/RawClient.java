@@ -26,6 +26,7 @@ final class RawClient implements AutoCloseable {
 	private final Object lock = new Object();
 
 	private boolean loggedIn;
+	private int entityId = -1;
 	private String kickReason;
 	private boolean closed;
 	private double[] position; // x, feet y, eye y, z, as last set by the server
@@ -35,7 +36,8 @@ final class RawClient implements AutoCloseable {
 
 	/**
 	 * A packet the server sent that a test may ask about: player spawns (20: entity id, name), entity destroys (29: id),
-	 * chunk data (51: block x, z; d 1 if a whole chunk), block changes (53: x, y, z, block), sign texts (130: x, y, z, the lines), respawns (9).
+	 * chunk data (51: block x, z; d 1 if a whole chunk), block changes (53: x, y, z, block), sign texts (130: x, y, z, the lines), respawns (9),
+	 * health (8: health), velocities (28: entity id, x, y, z in 1/8000 blocks a tick).
 	 */
 	record Received(long at, int id, int a, int b, int c, int d, String text) {
 	}
@@ -106,6 +108,13 @@ final class RawClient implements AutoCloseable {
 			out.writeLong(0);
 			out.writeByte(0);
 			out.flush();
+		}
+	}
+
+	/** This player's own entity id, from the login packet. */
+	int entityId() {
+		synchronized (lock) {
+			return entityId;
 		}
 	}
 
@@ -315,7 +324,17 @@ final class RawClient implements AutoCloseable {
 	private void readPacket(int id) throws IOException {
 		switch (id) {
 			case 0: break;
-			case 1: in.readInt(); readString(in); in.readLong(); in.readByte(); synchronized (lock) { loggedIn = true; } break;
+			case 1: {
+				int self = in.readInt();
+				readString(in);
+				in.readLong();
+				in.readByte();
+				synchronized (lock) {
+					loggedIn = true;
+					entityId = self;
+				}
+				break;
+			}
 			case 2: readString(in); break;
 			case 3: {
 				String message = readString(in);
@@ -328,7 +347,7 @@ final class RawClient implements AutoCloseable {
 			case 4: in.readLong(); break;
 			case 5: in.readInt(); in.readShort(); in.readShort(); in.readShort(); break;
 			case 6: skip(12); break;
-			case 8: in.readShort(); break;
+			case 8: note(8, in.readShort(), 0, 0, 0, null); break;
 			case 9: in.readByte(); note(9, 0, 0, 0, 0, null); break;
 			case 10: in.readByte(); break;
 			case 11: skip(33); break;
@@ -366,7 +385,7 @@ final class RawClient implements AutoCloseable {
 			}
 			case 24: in.readInt(); in.readByte(); skip(12 + 2); skipTracked(); break;
 			case 25: in.readInt(); readString(in); skip(16); break;
-			case 28: skip(4 + 6); break;
+			case 28: note(28, in.readInt(), in.readShort(), in.readShort(), in.readShort(), null); break;
 			case 29: note(29, in.readInt(), 0, 0, 0, null); break;
 			case 30: skip(4); break;
 			case 31: skip(4 + 3); break;

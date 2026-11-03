@@ -34,7 +34,8 @@ import org.studioquire.oldfaithful.selftest.mixin.RedstoneTorchInvoker;
  * every one of them comes out the other way. What only shows on screen or by ear (the sky, the cursor's item,
  * footsteps, undersides) and the bed check (it needs a sleeping player and a monster's path) are the user's or
  * reasoned (docs/fixes.md). Pending ticks saved with their chunk (#42) are checked on the real server
- * (`:oldfaithful-fixes:serverTicksTest`). The last scene puts the player in a boat and out again.
+ * (`:oldfaithful-fixes:serverTicksTest`), as are the world fixes from the piston hunt. The player's own sneak step off
+ * an inside corner (#57) is made first, synchronously; the last scene puts the player in a boat and out again.
  */
 final class FixesCheck {
 	private static final int SETTLE_TICKS = 40;
@@ -68,6 +69,8 @@ final class FixesCheck {
 		for (int x = bx - 32; x <= bx + 32; x += 16) {
 			for (int z = bz - 32; z <= bz + 32; z += 16) world.getBlockId(x, Y, z);
 		}
+
+		sneakOffCorner(mc, world);
 
 		// #19: water right above a torch standing on stone, ticked once now: in this new world the scheduled tick would
 		// wait behind the generator's backlog (some 9,000 liquid ticks, past the 1,000 a tick the world works through).
@@ -265,6 +268,37 @@ final class FixesCheck {
 		}
 		boat = new BoatEntity(world, wx + 0.5, 63.0, wz + 0.5);
 		world.spawnEntity(boat);
+	}
+
+	/**
+	 * #57: the player, sneaking, on an L of three blocks, standing over the inside corner, steps diagonally towards the
+	 * missing fourth: each of the step's parts alone keeps a block underfoot, the two together don't. The step is made
+	 * through the player's own move, as walking makes it; then the player goes back where it was.
+	 */
+	private void sneakOffCorner(Minecraft mc, World world) {
+		int cx = bx - 30, cz = bz + 30;
+		for (int dx = -1; dx <= 2; dx++) {
+			for (int dz = -1; dz <= 2; dz++) world.setBlockWithoutNotifyingNeighbors(cx + dx, Y - 1, cz + dz, 0, 0);
+		}
+		world.setBlockWithoutNotifyingNeighbors(cx, Y - 1, cz, Block.STONE.id, 0);
+		world.setBlockWithoutNotifyingNeighbors(cx + 1, Y - 1, cz, Block.STONE.id, 0);
+		world.setBlockWithoutNotifyingNeighbors(cx, Y - 1, cz + 1, Block.STONE.id, 0);
+		double ox = mc.player.x, oy = mc.player.y, oz = mc.player.z;
+		boolean wasSneaking = mc.player.input.sneaking, wasOnGround = mc.player.onGround;
+		mc.player.setPosition(cx + 0.95, Y + mc.player.standingEyeHeight, cz + 0.95);
+		double feet = mc.player.boundingBox.minY;
+		mc.player.onGround = true;
+		mc.player.input.sneaking = true;
+		mc.player.move(0.4, 0.0, 0.4);
+		boolean held = world.getEntityCollisions(mc.player, mc.player.boundingBox.offset(0.0, -1.0, 0.0)).size() > 0;
+		String at = String.format("%.2f, %.2f", mc.player.x - cx, mc.player.z - cz);
+		mc.player.input.sneaking = wasSneaking;
+		mc.player.setPosition(ox, oy, oz);
+		// The move left the player off the ground (it moved nothing vertically); mining checks below need it back.
+		mc.player.onGround = wasOnGround;
+		mc.player.velocityX = mc.player.velocityY = mc.player.velocityZ = 0.0;
+		results.check("fixes #57: sneaking diagonally off an inside corner keeps a block underfoot (stopped at " + at + ", feet at "
+				+ String.format("%.2f", feet - Y) + ")", held && Math.abs(feet - Y) < 0.01);
 	}
 
 	private static Slot slot(ScreenHandler screen, int index) {

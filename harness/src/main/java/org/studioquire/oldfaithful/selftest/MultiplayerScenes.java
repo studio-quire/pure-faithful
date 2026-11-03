@@ -1,6 +1,7 @@
 package org.studioquire.oldfaithful.selftest;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.entity.MobSpawnerBlockEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.passive.PigEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
@@ -45,6 +46,10 @@ public final class MultiplayerScenes {
 				if (dx != 0 || dz != 0) world.setBlock(penX + dx, FLOOR + 1, pz + dz, Block.FENCE.id);
 			}
 		}
+		// #62: a cow spawner 20 blocks west, out of a player's 16-block reach (so it spawns nothing), in view.
+		world.chunkCache.loadChunk((px - 20) >> 4, pz >> 4);
+		world.setBlock(px - 20, FLOOR, pz, Block.SPAWNER.id);
+		((MobSpawnerBlockEntity) world.getBlockEntity(px - 20, FLOOR, pz)).setSpawnedEntityId("Cow");
 		for (int i = 0; i < 2; i++) {
 			PigEntity pig = new PigEntity(world);
 			pig.setPositionAndAngles(penX + 0.5 + i * 0.05, FLOOR + 1, pz + 0.5, 0, 0);
@@ -83,6 +88,34 @@ public final class MultiplayerScenes {
 				other.yaw = Float.parseFloat(a[2]);
 				other.pitch = 0;
 				System.out.println("[oldfaithful-selftest] " + other.name + " turned to " + other.yaw);
+				break;
+			}
+			case "hurt":
+				// #58: a fresh hit, so the next half second's damage meets beta's protection.
+				player.damage(null, 1);
+				System.out.println("[oldfaithful-selftest] hurt " + player.name + " (health " + player.health + ")");
+				break;
+			case "boom":
+				// #58: an explosion a block and a half east of the player.
+				world.createExplosion(null, player.x + 1.5, player.y, player.z, 2.0F);
+				System.out.println("[oldfaithful-selftest] explosion beside " + player.name);
+				break;
+			case "pool": {
+				// #61: a pool to stand in, south of the spawn's scenes, under the scenes' floor: water at the feet and, in the
+				// block above, water three levels down from full, whose surface lies between the eye heights the server
+				// (1.62 above the feet) and clients (1.74) measured from. Placed without updates, so it doesn't flow.
+				int x = MathHelper.floor(player.x), z = MathHelper.floor(player.z) - 8, feet = FLOOR - 5;
+				for (int dx = -1; dx <= 1; dx++) {
+					for (int dz = -1; dz <= 1; dz++) {
+						for (int y = feet - 1; y <= feet + 3; y++) {
+							boolean inside = dx == 0 && dz == 0 && y >= feet;
+							int id = !inside ? (y <= feet + 1 ? Block.STONE.id : 0) : y == feet ? Block.WATER.id : y == feet + 1 ? Block.WATER.id : 0;
+							world.setBlockWithoutNotifyingNeighbors(x + dx, y, z + dz, id, inside && y == feet + 1 ? 3 : 0);
+						}
+					}
+				}
+				player.networkHandler.teleport(x + 0.5, feet, z + 0.5, player.yaw, player.pitch);
+				System.out.println("[oldfaithful-selftest] " + player.name + " in a pool at " + x + " " + feet + " " + z);
 				break;
 			}
 			case "unpig": {

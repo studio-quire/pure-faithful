@@ -1,6 +1,7 @@
 # Saves that can't lose a world (`oldfaithful-saves`)
 
-Claude Opus 5.5, 2026-11-02. Fixes `docs/bugs.md` #1 and #2 (and #52, a server's level.dat), which the user put in Purist (2026-11-02): nothing
+Claude Opus 5.5, 2026-11-02. Fixes `docs/bugs.md` #1 and #2 (and #52, a server's level.dat; #43 and #65, block
+entities that crash), which the user put in Purist (2026-11-02): nothing
 changes in play, the files stay b1.7.3's own format (plain b1.7.3 and other tools read them, and we read theirs), and
 a crash, a kill or a power cut leaves every file as it was before a save or after it, never damaged. Both editions,
 client and server.
@@ -74,6 +75,11 @@ walked and every length checked before the game's parser sees it (`NbtCheck`), a
   and the check is a pass over the block array. A piston's moving block (36) has no default (`createBlockEntity` is
   null) and vanilla's code for it handles none, so it's left as is, as are other mods' blocks. A lit furnace stays lit
   until it next burns something;
+- a spawner set to something that isn't a mob (primed TNT, an item: world editors allow it; `docs/bugs.md` #65) is set
+  back to a pig, the block's default, and listed with the repairs (`ChunkLoad.repairSpawners`). Its tick casts what it
+  makes to a mob, so such a spawner threw every tick a player was within 16 blocks: the crash screen, or a server that
+  stops, each time the world opens. An id nothing is registered under is left alone (the game already spawns nothing
+  for it, and it may be a mod's mob that comes back with the mod);
 - what can't be read at all is copied to `corrupt/` in the world (or dimension) folder, bytes exactly as found plus a
   `.txt` note, forced to disk, and only then regenerated as vanilla would, so the world goes on and the original is
   kept for repair (a damaged record has nothing better to offer, and later Minecraft versions do the same);
@@ -108,6 +114,9 @@ written to a temporary file of its own, then checked to be complete NBT (the gam
 `finally`, so a save that threw halfway still closes it) before it's forced and renamed over the target; a failed
 write or an incomplete file leaves the previous one.
 
+**Pistons near the edge of the loaded world** (`PistonBlockMixin`, both sides): a crash the piston hunt found
+(`docs/bugs.md` #53); in a loaded world nothing changes.
+
 **The committer** never runs two saves of the same file at once (each has its own temporary file anyway), and a full
 save's `commitAll` returns only when every save, including one another thread is running, is on disk.
 
@@ -129,16 +138,18 @@ save's `commitAll` returns only when every save, including one another thread is
   control: damaged entries after 6 of 30 kills. (An earlier run counted only entries present, read the file with the
   constructor that wipes unaligned indexes, and spent most of its time compressing; its "0 in 150" was weaker
   evidence than it looked.)
-- `./gw :oldfaithful-saves:serverSaveTest` (about 30 s): the real dedicated server. Four chunks beside spawn damaged
+- `./gw :oldfaithful-saves:serverSaveTest` (about 45 s): the real dedicated server. Four chunks beside spawn damaged
   four ways (damaged compressed data, unknown compression, unreadable block entities, sky light of the wrong size):
   the first two are copied byte for byte to `corrupt/` and regenerated, the other two load without the bad part and
   are saved repaired, all four reported. The block-entity chunk holds a chest, furnace, dispenser, jukebox (holding a
   record), note block, sign, spawner and piston moving block, each with a field of the wrong type; a fifth, otherwise
-  sound chunk a chest with no block entity at all (as 0.1.0 saved them). A test-only server mod (the `scenario`
+  sound chunk a chest with no block entity at all (as 0.1.0 saved them) and a spawner of primed TNT (#65), which the
+  scenario mod makes tick as if a player stood beside it. A test-only server mod (the `scenario`
   source set) then checks each has a fresh block entity of the right kind with its facing kept (none for the moving
   block), puts a diamond in each container and a record in the jukebox, and breaks them all: the diamonds and the
-  record drop and the server runs on. The control, before the fix: the first chest broken
-  threw in `ChestBlock.onBreak` and the server stopped ("Unexpected exception"). Then the spawn region is left 300 bytes past a whole sector: the server pads
+  record drop and the server runs on; 40 ticks later the spawner, set back to pigs, has ticked without a fault. The
+  controls, before each fix: the first chest broken threw in `ChestBlock.onBreak`, and the TNT spawner's first tick
+  threw a ClassCastException; either way the server stopped ("Unexpected exception"). Then the spawn region is left 300 bytes past a whole sector: the server pads
   it at the end and every chunk survives. Then the server is killed outright 8 times during bursts of save-all (about
   100 in all): after each kill, every region is whole sectors, no entry has gone, and every chunk and level.dat read
   cleanly with vanilla's reader. A final start after the kills reports nothing. (These kills land mid-write less often
@@ -153,6 +164,8 @@ save's `commitAll` returns only when every save, including one another thread is
   client mixin, `clientStartupTest` makes a world, plays 100 ticks and saves on leaving (the world it left read
   cleanly, 299 chunks, checked once), `serverTest` and `multiplayerTest` run the server with it (the server package
   includes it). The benchmark (`benchSetup`) leaves it out, so its baseline stays as measured.
+- `./gw :hunt:pistonEdgeTest` (about a minute; the hunt is test-only and private): #53's scenes on the real server with
+  this mod (no fault, nothing lost) and without it (the control, where they fail).
 - `./gw :oldfaithful-saves:test -Pmeasure`: the game-thread cost of a chunk save, ours against vanilla, in autosave's
   rhythm with background forcing going on. Measured 2026-11-02: median 1.0 ms both, p99 1.9 to 2.0 ms ours against
   2.0 to 2.1 ms vanilla (compression dominates; the forcing never stalls the writer).

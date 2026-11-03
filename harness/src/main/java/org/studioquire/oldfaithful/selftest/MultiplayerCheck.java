@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.MobSpawnerBlockEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screen.DisconnectedScreen;
 import net.minecraft.client.network.MultiplayerClientPlayerEntity;
@@ -27,7 +29,8 @@ import org.studioquire.oldfaithful.selftest.mixin.LivingEntityLerpAccessor;
  * <li>#50: another player ("SkyTurner", a raw client of the task) turned by the server in steps of 45 degrees; where
  * this client has them facing once the turn is done (beta: often a third short);</li>
  * <li>#49: this player dies, a pig is removed while they're dead, they respawn: the pig must be gone from this
- * client's world (beta: frozen there), the other one sent again.</li>
+ * client's world (beta: frozen there), the other one sent again;</li>
+ * <li>#62, on joining: a cow spawner 20 blocks west shows a cow where both sides have the fix (beta: a pig).</li>
  * </ul>
  */
 public final class MultiplayerCheck {
@@ -78,9 +81,11 @@ public final class MultiplayerCheck {
 				px = MathHelper.floor(mc.player.x);
 				pz = MathHelper.floor(mc.player.z);
 				if (mc.world.getBlockId(px - 2, Y, pz) != 3 || pigs(mc).size() < 2) return timeout(mc, 1200, "the scene arriving");
+				if (mc.world.getBlockId(px - 20, MultiplayerScenes.FLOOR, pz) != 52) return timeout(mc, 1200, "the spawner arriving");
 				// Standing (mining in the air is 5 times slower), and settled.
 				if (!mc.player.onGround || ++settled < 20) return timeout(mc, 1200, "standing on the scene");
 				results.pass("multiplayer (" + label + "): joined, scene in view at " + px + " " + Y + " " + pz);
+				spawnerResult(mc);
 				System.out.println("[oldfaithful-selftest] mp ready");
 				next();
 				return false;
@@ -248,6 +253,17 @@ public final class MultiplayerCheck {
 			results.check("#50 (" + label + "): another player finishes each 45-degree turn (" + seen + ")", worst < 1.0);
 		} else {
 			results.check("#50 control (" + label + "): beta leaves turns short (" + seen + ")", worst > 5.0);
+		}
+	}
+
+	/** #62: the cow spawner the scene put 20 blocks west: what this client shows in it. */
+	private void spawnerResult(Minecraft mc) {
+		BlockEntity be = mc.world.getBlockEntity(px - 20, MultiplayerScenes.FLOOR, pz);
+		String shown = be instanceof MobSpawnerBlockEntity ? ((MobSpawnerBlockEntity) be).getSpawnedEntityId() : "no spawner";
+		if (fixedClient && fixedServer) {
+			results.check("#62 (" + label + "): a cow spawner shows a cow (" + shown + ")", "Cow".equals(shown));
+		} else {
+			results.check("#62 control (" + label + "): beta shows every spawner as a pig (" + shown + ")", "Pig".equals(shown));
 		}
 	}
 

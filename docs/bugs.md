@@ -4,7 +4,7 @@ Claude Opus 5.5, 2026-11-02. Second pass, then the first fixes. Purist leaves al
 says it may be the user's call to take into Purist. Old Faithful (Fixed) is narrow (user, 2026-11-02): beta as it was
 meant to work, its clear mistakes fixed, and anything players built around left as beta (at most a setting that
 defaults to beta). What later versions changed, the **ask** entries, belongs to the polished edition, Still Faithful,
-not to Fixed. Fixed so far: thirty entries in `oldfaithful-fixes` (`docs/fixes.md`), each with its
+not to Fixed. Fixed so far: forty-one entries in `oldfaithful-fixes` (`docs/fixes.md`), each with its
 own switch in `config/oldfaithful-fixes.properties`; lighting (#3) in `oldfaithful-lighting` (`docs/lighting.md`).
 
 Sources:
@@ -19,6 +19,8 @@ Sources:
   version pages' change lists.
 - A read-only bug hunt (2026-11-02) through redstone, doors, rails, crops, containers, entity saving and the
   multiplayer tracker and chunk map: #41 to #51, and the multiplayer entries traced.
+- The piston hunt on the real server (2026-11-02, below): #53 to #55 and #67; and a read of movement, damage, spawning
+  and generation, checked on the server where cheap: #56 to #66.
 
 Key:
 - **Status**: **T** = cause traced in the decompiled code here (class/method given); **L** = listed by a fix mod,
@@ -60,7 +62,7 @@ Key:
 | 20 | Lava lingers without its source; water sources never form above water | ask | SF | low-mid | T |
 | 21 | Far Lands | quirk | none | low-mid | L |
 | 22 | Jitter and stretched textures far from the origin (float precision) | bug | OF | low-mid | L |
-| 23 | Piston crashes: none found in normal play; out-of-range data crashes | bug | OF | low | T (partly) |
+| 23 | Piston crashes: out-of-range data crashes; the piston hunt found one in normal play (#53) | bug | OF | low | T |
 | 24 | Player-placed leaves decay once a log or leaves near them is broken | ask | SF | low-mid | T |
 | 25 | Slimes don't split when killed by a big hit | bug | OF | low | fixed (OF) |
 | 26 | Mobs that wake you can reach you through a wall | bug | OF | low-mid | fixed (OF) |
@@ -89,6 +91,21 @@ Key:
 | 50 | Multiplayer: other players turn in steps and can stay up to about 11 degrees off | bug (yaw), ask (threshold) | OF / SF | low (MP) | yaw fixed (OF) |
 | 51 | Multiplayer: a server movement check (details kept private) | ask | none | low | T |
 | 52 | Server with `allow-nether=false`: every restart resets the world's time and weather, and a new world's spawn (level.dat overwritten by the unticked Nether's); with the Nether on, its spawn and weather still win, and a restart undoes sleep | bug | Pure / OF | mid (MP) | fixed (Nether off); T |
+| 53 | A crash involving pistons near the edge of the loaded area (details kept private) | bug | Pure | low odds, a crash | fixed |
+| 54 | Pistons: an interaction that can lose blocks (details kept private) | bug | none (left as beta) | low-mid (redstone builds) | T |
+| 55 | A door's top half on its own passes redstone updates to the block below as if it were the door's bottom: that block is deleted and a door dropped | bug | OF | low | fixed (OF) |
+| 56 | One-deep water breaks only some long falls: the landing tick isn't checked for water, so most heights hurt as on stone | bug | OF | mid | fixed (OF) |
+| 57 | Sneaking doesn't stop a diagonal step off an inside corner | bug | OF | low-mid | fixed (OF) |
+| 58 | Multiplayer: an explosion doesn't push a player who was hurt in the last half second (or just joined or respawned) | bug | OF | low-mid (MP) | fixed (OF) |
+| 59 | Mobs nod their heads every tick when looking up or down at you | bug | OF | low | fixed (OF) |
+| 60 | Multiplayer: a /tp keeps the fall the player had built up, and lands it as damage | bug | OF | low (MP) | fixed (OF) |
+| 61 | Multiplayer: the server measures drowning from 1.62 above the feet, the client from 1.74 | bug | OF | low (MP) | fixed (OF) |
+| 62 | Multiplayer: every mob spawner shows a spinning pig | bug | OF | mid (MP) | fixed (OF) |
+| 63 | Slimes spawn with no check for room: big ones in walls, inside each other | bug, ask (farm rates) | OF / SF | low | T |
+| 64 | West and north of 0, 0, mobs won't spawn beside water or lava on their west or north side | bug | OF | low | fixed (OF) |
+| 65 | A spawner set to a thing that isn't a mob (an edited world) crashes the game every tick a player is near | bug | Pure | low (edited worlds) | fixed |
+| 66 | Small spawning and generation slips: squid in lava, Nether chunks without a heightmap, the Nether's decoration unseeded, clay beside the water it tested | bug, ask | OF / SF / none | low | squid fixed (OF); the Nether's heightmap T |
+| 67 | Falling sand or gravel deletes any block of its own kind it passes into (a piston pushing it into a column, say) | bug | OF | low | fixed (OF) |
 
 #32 (video settings sliders can't be dragged) left the table: vanilla has no slider there (its entry).
 
@@ -412,6 +429,8 @@ All of these need an edited world or a hostile server, and the hardening already
 disconnect. Beta 1.8's unnamed piston crashes may be in code 1.8 itself added. A real crash hunt would still push and
 pull every block kind with a piston on the test server. Quasi-connectivity and block-update detection are quirks
 technical players rely on: leave them.
+The piston hunt (below, 2026-11-02) then pushed and pulled everything on the real server: one crash in normal play (#53),
+and two ways pistons lose blocks (#54, #67).
 
 ### 24. Player-placed leaves decay (T, ask)
 Leaves decay only once bit 8 of their data is set (`LeavesBlock.onTick`). The bit is set on leaves within 4 of a
@@ -767,7 +786,208 @@ copy (so every restart rerolls it), and a night slept through is undone by a res
 `/time` sets both, so it's fine). Read and reproduced for spawn and weather, sleep read only. **OF** candidate (the
 level's data should be the overworld's alone); the spawn near 0, 0 is what beta servers had, so moving it may be an ask.
 
+### 53. A crash involving pistons near the edge of the loaded area (T; Pure)
+Found by the piston hunt (below), 2026-11-02; the details are kept private. Fixed in both editions (`oldfaithful-saves`).
+
+### 54. A piston interaction that can lose blocks (T)
+Found by the piston hunt (below), 2026-11-02; the details are kept private. Left as beta in every edition (user, 2026-11-02): it's rare, technical players use the behaviour, and changing the order pistons write in risks breaking contraptions.
+
+### 55. A lone door top passes updates to the block below (T, seen)
+`DoorBlock.neighborUpdate`: a top half (data bit 8) checks that a door is below it and removes itself if not, then,
+when the update came from a redstone source, calls the same method for the cell below without checking it's a door. So
+the block below is treated as a door's bottom whose top is missing: removed, and a door dropped (`dropStacks` with the
+door's own drop). Seen in the hunt: a door top on a piston, a torch placed beside it, the piston gone and a door item
+lying there. Needs a top half with no bottom, which vanilla play doesn't leave (breaking either half removes both) but
+an edited or converted world can; then any block under it (a chest, spilling its contents) is deleted. Fix: forward
+only when the block below is this door. OF, low.
+**Fixed in Old Faithful** (2026-11-02, `doors.loneTop`): the update goes down only to the door's own bottom half.
+Checked on the real server (`ServerWorldFixesTest`): a lone top on a chest, a redstone torch placed beside it; the
+chest stays (beta: gone, a door dropped).
+
+### 56. One-deep water breaks only some falls (T, seen)
+`Entity.baseTick` zeroes the fall distance only when the entity is in water at the start of a tick (`checkWaterCollisions`,
+a box shrunk 0.4 at each end, so only once the feet are within 0.6 of the pool's floor). The tick that lands moves the
+entity from above that window to the floor and `Entity.fall` lands the whole fall (`LivingEntity.onLanding`) with no
+second look for water. Measured on the real server (the hunt's `falls` set, a pig dropped onto one-deep water and onto
+stone from 4 to 40 blocks): from 12 blocks down, about half the heights hurt exactly as stone does (12: 8 damage, 20:
+16, 31: 28), the rest are safe; each height always the same way. Players get the same rule (single player runs it on
+the client; a server runs it from the move packets). Fix: check for water once more when a fall lands, as later versions
+do. OF, mid: more landings become safe, none less.
+**Fixed in Old Faithful** (2026-11-02, `falls.waterLandings`): the landing makes baseTick's water test once more
+(without its push) and lands nothing if it finds water. Checked on the real server (`ServerWorldFixesTest`): pigs
+dropped from 12 to 31 blocks into one-deep water, none hurt; beta hurt 13 of the 20 (12: 8 damage, 31: 28). A
+design to keep in mind: a mob farm dropping mobs into water deep enough to count, relying on the fall to hurt them,
+would stop hurting them at the heights where beta did; none is known (farms drop onto blocks), and the switch is there.
+
+### 57. Sneaking off a corner diagonally (T)
+`Entity.move`'s sneak guard trims the x step and the z step separately, each tested alone against support a block down,
+never the two together. At an inside corner (an L of blocks) the x step is held by one block and the z step by the
+other, so a diagonal step lands over the gap and the player drops. OF, low-mid; both sides run the same code, so a
+client fix alone is enough.
+**Fixed in Old Faithful** (2026-11-02, `controls.sneakCorners`, client): after beta's two trims, the step is trimmed
+while the two parts together have nothing under them, as later versions do. A server repeats the move with beta's
+trims, which find support for each part, so it accepts the shorter step. Checked in the running client
+(`clientStartupTestFixed`): sneaking diagonally off an inside corner, the player stays on it.
+
+### 58. Explosions don't push a recently hurt player on a server (T)
+`Explosion.explode` damages each entity, then adds its push to the entity's velocity. A server sends a player's velocity
+only when `velocityModified` is set, which `LivingEntity.damage` does only for a fresh hit (`scheduleVelocityUpdate`);
+within the 10 ticks after earlier damage (or the invulnerable seconds after joining or respawning) it returns before
+that. The client never runs the explosion itself (`ClientNetworkHandler.onExplosion`), so the push is lost: chained TNT, a
+creeper right after a zombie's hit. Mobs are moved by the server, so they're pushed. Fix (server only, vanilla clients
+fine): mark the player's velocity for sending when an explosion pushes them. OF, low-mid.
+**Fixed in Old Faithful** (2026-11-02, `multiplayer.explosionPush`, server). Checked by `fixesMultiplayerTest`: a raw
+client hurt, then an explosion beside it a quarter second later, is sent its push (beta: nothing).
+
+### 59. Mobs nod (T)
+`LivingEntity.lookAt` steps the pitch with `pitch = -lerpRotation(pitch, target, max)`: the step starts from the stored
+pitch though it works in the negated one, so it settles only while the target is within half the step limit of level.
+Beyond that the head swings between two angles every tick (a zombie looking 45 degrees up: -45 and +15; directly
+under a player, about 80 degrees). Fix: step from `-pitch`. OF, low (cosmetic); worth a look in game first.
+**Fixed in Old Faithful** (2026-11-02, `mobs.headNod`). Mob pitch only sets how the head is drawn: skeletons' arrows
+and ghasts' fireballs are aimed apart from it. Checked on the real server (`ServerWorldFixesTest`): a pig looking 45
+degrees up settles at -45 (beta: -40, 0, -40, 0...). How it looks in game is the user's check.
+
+### 60. /tp keeps the fall (T)
+`ServerPlayNetworkHandler.teleport` (used by /tp) moves the player without resetting `fallDistance`, so a player
+teleported mid-fall lands the fall they'd built at the destination (20 blocks fallen: 16 damage). OF, low (MP).
+**Fixed in Old Faithful** (2026-11-02, `multiplayer.tpFall`, server): /tp clears the fall. Only /tp: the server's own
+teleport back of a player who moved wrongly keeps beta's behaviour, so a fall can't be shed by provoking one. Checked
+by `fixesMultiplayerTest`: a raw client 10 blocks into a fall, moved by /tp, lands unhurt (beta: 7 damage).
+
+### 61. Drowning measured at different heights (T)
+`Entity.isInFluid` tests `y + getEyeHeight()`. The client's player keeps its eyes in `y` and adds 0.12
+(`PlayerEntity.getEyeHeight`), 1.74 above the feet; the server's (`ServerPlayerEntity.getEyeHeight`) is 1.62. With the
+water surface between those heights (standing on a full block in water two levels down from full, or on a closed
+trapdoor under water) the server drowns a player whose screen shows full air; mining speed in water disagrees the same
+way. OF, low.
+**Fixed in Old Faithful** (2026-11-02, `multiplayer.drowningHeight`, server): the server measures a player's eyes where
+clients and single player do (1.74), so it agrees with the air bubbles a player sees; vanilla clients already measure
+there. Checked by `fixesMultiplayerTest`: a raw client standing 20 s with the surface between the two heights isn't
+hurt (beta: drowning damage after 16 s).
+
+### 62. Every spawner is a pig in multiplayer (T)
+A server sends no block entity data but signs' (`ChunkMap$TrackedChunk.sendBlockEntityUpdate`: only `SignBlockEntity`
+has an update packet), so the client makes the spawner's block entity itself, whose constructor says "Pig", and draws a
+spinning pig in every dungeon. Spawning itself is the server's and right. Fix needs both sides (a payload only a fixed
+client reads). OF, mid (MP).
+**Fixed in Old Faithful** (2026-11-02, `multiplayer.spawnerMobs`, both): a fixed server gives spawners an update packet,
+the sign packet at the spawner's position with a mark and the entity id (`SpawnerMobs`); a vanilla client applies a
+sign packet only to a sign, so it ignores it and keeps its pig, and a fixed client sets the spawner's mob. Ids over 15
+characters (the sign line's limit; mods' mobs) aren't sent. Checked in all four mixes by `fixesMultiplayerTest`: a cow
+spawner shows a cow only where both sides have the fix, a pig elsewhere, and no client is disconnected.
+
+### 63. Slimes skip the room check (T)
+`SlimeEntity.canSpawn` replaces `LivingEntity.canSpawn` without calling it, so slimes skip the collision, entity and
+fluid tests every other mob keeps: a size-4 slime (2.4 blocks wide) spawns wherever two blocks of air sit on a solid
+block, so in walls (and suffocates, splitting) and inside other slimes. A clear slip (OF), but slime farms are built on
+today's rates: a switch defaulting to beta at least, or Still Faithful's.
+
+### 64. A wrong extra block west and north of 0, 0 (T)
+`World.isBoxSubmergedInFluid` subtracts one from the box's lowest x, y and z when they're negative, though
+`MathHelper.floor` already floors negative numbers. So in the negative quadrants it also tests the block beyond a mob's
+west (or north) side: no mob spawns with water or lava beside it there (`LivingEntity.canSpawn`), riverbanks and
+spawning floors beside channels included, while east and south of 0, 0 they do; the swimmer's lift out of water reads it
+too. The server-only `isAnyBlockInBox` has the same subtraction (movement checks). OF, low.
+**Fixed in Old Faithful** (2026-11-02, `spawning.besideWater`): `isBoxSubmergedInFluid` tests the box's own blocks.
+`isAnyBlockInBox` is left as beta: it only serves the server's flying check, and fixing it would make that check
+stricter for honest players (CLAUDE.md > Decisions). Checked on the real server first (`ServerWorldFixesTest`, the
+control): a pig on grass with water beside its west (or north) side may spawn east and south of 0, 0 and not west and
+north of it; with the fix it may everywhere.
+
+### 65. A spawner of something that isn't a mob crashes (T; Pure)
+`MobSpawnerBlockEntity.tick` casts what `EntityRegistry.create` makes to `LivingEntity`; an `EntityId` naming another
+entity (`PrimedTnt`, `Item`, as world editors allow) throws every tick a player is within 16 blocks: the crash screen, or
+a server that stops. An unknown id is handled. Edited worlds only. Pure (a crash).
+**Fixed in both editions** (2026-11-02, `oldfaithful-saves`, `ChunkLoad.repairSpawners`): a loaded spawner whose id names
+a registered entity that isn't a mob is set back to a pig and listed with the repairs (`docs/saves.md`); an unknown id
+is left (handled, and maybe a mod's mob). `serverSaveTest` loads a primed-TNT spawner and ticks it as if a player
+stood beside it; without the repair the server stops.
+
+### 66. Small spawning and generation slips (T)
+- Squid can spawn in lava (`NaturalSpawner.isValidSpawnPos` asks for any fluid; the pack's walk can reach a lava lake at
+  the same height): unseen, it burns. **Fixed in Old Faithful** (2026-11-02, `spawning.squidInWater`): the place must
+  be water. Checked on the real server (`ServerWorldFixesTest`): lava refused, water accepted (beta: both accepted).
+- Nether chunks never get a heightmap (`NetherChunkGenerator.getChunk` skips `populateHeightMap`), so every Nether cell
+  "sees the sky"; the only effect found: plants on dirt there never die of darkness. OF at most; left as beta
+  (2026-11-02): nothing visible to gain, and a heightmap in new Nether chunks only (the old ones keep theirs empty)
+  would touch the Nether's light and sky checks for no player-facing fix.
+- Generation, left as beta because fixing changes seeds (Still Faithful at most): the Nether's decoration isn't seeded
+  (`NetherChunkGenerator.decorate` never reseeds, so glowstone, fire and lava falls depend on load order); clay is placed
+  8 blocks from the water it tested (`ClayOreFeature`), which is why beta's clay sits in beach sand; climate is sampled
+  off the noise lattice at chunk seams (about a tenth of a block); the spawner's spawn area is centred on its corner.
+
+### 67. Falling sand deletes sand it passes into (T, seen)
+`FallingBlockEntity.tick` removes the block of its own kind at its position on every tick, not only the first (where
+it's meant to clear the block it fell from; later versions check `timeFalling == 1`). So falling sand or gravel that
+ends up inside a cell holding the same block deletes it: seen in the piston hunt when a piston pushing up into a sand
+column shoved a falling sand into the sand above it (`chains/2x12+0/f1/plain`: two sand, one left; 13 such scenes, plain
+and sticky). Also reachable by placing sand into a falling sand's path. Fix: only on the first tick. OF, low.
+**Fixed in Old Faithful** (2026-11-02, `blocks.fallingSandKeepsKind`): the block is cleared on the first tick only. A
+vanilla client on a fixed server still clears such a block in its own copy of the world (it runs the same tick for the
+falling block), so the server sends each kept block again as it's passed and when the falling block lands. Checked on
+the real server (`ServerWorldFixesTest`): a falling sand some ticks into its fall in a cell of sand leaves two sand
+(one dropped as an item); beta, one.
+
+## The piston hunt
+
+Claude Opus 5.5, 2026-11-02. `./gw :hunt:pistonHunt` (about 6 minutes) runs the real b1.7.3 server with a test-only mod
+(`hunt/`, never shipped) in a flat, bare test world: each scene gets its own cell of air, a script of what happens tick
+by tick (power is a redstone torch placed and taken away), 30 ticks to settle, then checks. An exception from a block
+entity, block tick or entity, which would stop a vanilla server, is caught, recorded against its scene, and the hunt
+goes on (`-Phunt.unguarded=true` lets it crash as vanilla does). Checked after every scene: moving-piston blocks left,
+block entities on the wrong block, in the world's list but not their chunk, set over a live one or onto a block without
+one; heads without their piston and extended pistons without their head; and a census of the cell before and after
+(blocks, moving blocks by what they carry, falling blocks, dropped items), so anything duplicated or lost shows as a
+difference. Then the server restarts and every chunk used is read back from disk. Output in
+`local/run/piston-hunt/run-*/`: `hunt-report.txt`, `hunt-deltas.tsv` (every scene's census difference),
+`hunt-reload.txt`. `-Phunt.only=<scene prefix> -Phunt.trace=true` prints a scene's every block change and piston action;
+`-Phunt.mods=saves,fixes` adds our mods, to re-run after a fix.
+
+The scenes, 25,848: every block id 1 to 96 with every data value 0 to 15, pushed and pulled in all six directions by
+plain and sticky pistons (18,432); chains of 1, 2, 11, 12 and 13 of stone and of sand, ending in air, obsidian, a flower,
+a piston or water; a piston in front of a piston in every pair of facings, retracted and extended, one or both powered;
+eight power timings (a pulse in one tick, on-off-on in one tick, gaps of 1 to 3 ticks, flicker, re-powering mid-retract)
+for eight blocks and a 12-chain; pistons at y 0 to 4 and 122 to 127 facing up, down and sideways; 35 special builds
+(beds and doors both ways, rails, wire, repeaters, plates, torches, levers, buttons, ladders, signs and trapdoors on what's
+pushed, cactus, cane, wheat, snow, flowers, a chest beside the path, an item, a pig and a minecart on what's pushed, a cart
+in front, falling sand, water and lava beside the head, fire, TNT); chains across chunk borders; pushes and pulls with the scenes' chunks saved, or unloaded and loaded again, at each step of the
+move; pistons working together (2,808); and 1,500 random machines of pistons, blocks, wire, rails, repeaters, chests
+and torches coming and going.
+
+Found: #53 and #54 (details kept private),
+#55 (the lone door top), #67 (falling sand pushed into sand deletes it). Everything else came out clean: no exception in
+normal play, no duplication, no other block lost in any single-piston scene, chain, timing, height, special build or
+save (census differences there are breakable blocks dropping as they should, and cells cut short by the scene's own
+edges); every timing leaves pistons and heads
+consistent; saves and unloads at any step of a move load back and finish (the moving block entity is saved and resumes).
+The one exception found in a loaded world needs data no game makes: #23's facings 6 and 7, for a piston (build and
+push) and a head (any neighbour change); and a lone moving-piston block or head placed by hand stays as it is (edited
+worlds only). Beta 1.8's unnamed piston crash fixes most likely include #53.
+
+Re-run with `oldfaithful-saves` and `oldfaithful-fixes` (2026-11-02, after #55, #65, #67 and the rest were fixed): the
+same 955 scenes with problems (#23's out-of-range data, #54's contests, the fuzz machines' #54 cases) and nothing new;
+#53's faults gone, #67's chains keep their sand, a lone door top no longer takes the block below with it (it goes
+alone, as a top half does). The fuzz machines' census moved a few blocks either way in about 1,100 of 1,500: their
+drops scatter on the world's random numbers, which the fixes draw differently (a door top no longer drops a door);
+the totals are within a few percent and no machine gained a problem.
+
+Not a bug in vanilla, a trap for mods: a chunk unloaded and loaded again within one tick, before block entities tick,
+loses its block entities. The world's tick drops the unloaded chunk's old block entities from its list by position
+(`World.tickEntities`: `removeBlockEntityAt` on whatever chunk is there now), so it removes the reloaded chunk's fresh
+ones: chests emptied, moving blocks stuck as block 36 (seen in the hunt by forcing it). Vanilla never loads a chunk
+between the unload (`chunkSource.tick`, early in `World.tick`) and that cleanup, on a server or in single player; a mod
+that loads chunks in the world's tick could.
+
 ## Still thin
 
-Pistons beyond what #23 read, and the hole in #16b that lasts until relog, want the test server (a crash hunt; a
-capture of a hole). Rails, crops, doors and redstone were read in the bug hunt (2026-11-02): #41, #42, #44.
+The hole in #16b that lasts until relog wants a capture of one. Rails, crops, doors and redstone were read in the bug
+hunt (2026-11-02): #41, #42, #44. Where more hunting would pay off, after the piston hunt (2026-11-02):
+- Pistons in multiplayer: the client runs each piston action again on its own world (`ClientNetworkHandler.onPlayNoteSound`),
+  so a client that disagrees with the server about the cells (ghost blocks, #5; holes, #16b) can lose or keep blocks
+  differently; the hunt was server-only. Hardening's C1 turns a throw there into a disconnect.
+- More piston interactions like #54.
+- Sand and gravel generators and other entity-heavy machines (#67 was found by a scene not built for it); minecarts
+  and boats pushed by pistons; items and mobs in moving blocks.
+- Boat and minecart physics beyond #12 and #31, riders' suffocation, `ItemEntity` and flying mobs' movement; a server
+  check of #63 (slimes in walls). (#64's mirrored spawning was checked on the server, 2026-11-02.)

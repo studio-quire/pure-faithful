@@ -120,7 +120,21 @@ class ServerSaveTest {
 		editChunk(sky, level -> level.putByteArray("SkyLight", new byte[100]));
 		// And a chest with no block entity in a chunk that's otherwise fine, as Pure Faithful 0.1.0 saved such chests.
 		int[] bare = {sx + 1, sz + 1}, bareChest = {bare[0] * 16 + 4, 120, bare[1] * 16 + 4};
-		editChunk(bare, level -> level.getByteArray("Blocks")[4 << 11 | 4 << 7 | 120] = 54);
+		// And beside it (#65) a spawner set to primed TNT, as world editors allow: the spawner's tick casts what it makes
+		// to a mob and throws, every tick a player is near. The scenario mod makes it tick as if one were.
+		int[] tntSpawner = {bare[0] * 16 + 6, 120, bare[1] * 16 + 4};
+		editChunk(bare, level -> {
+			level.getByteArray("Blocks")[4 << 11 | 4 << 7 | 120] = 54;
+			level.getByteArray("Blocks")[6 << 11 | 4 << 7 | 120] = 52;
+			NbtCompound spawner = new NbtCompound();
+			spawner.putString("id", "MobSpawner");
+			spawner.putInt("x", tntSpawner[0]);
+			spawner.putInt("y", tntSpawner[1]);
+			spawner.putInt("z", tntSpawner[2]);
+			spawner.putString("EntityId", "PrimedTnt");
+			spawner.putShort("Delay", (short) 0);
+			level.getList("TileEntities").add(spawner);
+		});
 
 		// 3. The server loads them (spawn chunks load at start-up). The scenario mod then uses and breaks the blocks
 		// whose block entities were unreadable.
@@ -128,9 +142,12 @@ class ServerSaveTest {
 		for (int[] b : withEntities) spec.append(b[0]).append(',').append(b[1]).append(',').append(b[2]).append(';');
 		spec.append(bareChest[0]).append(',').append(bareChest[1]).append(',').append(bareChest[2]);
 		List<String> lines;
-		try (Server s = new Server(spec.toString())) {
+		String spawnerAt = tntSpawner[0] + " " + tntSpawner[1] + " " + tntSpawner[2];
+		try (Server s = new Server(spec.toString(), tntSpawner[0] + "," + tntSpawner[1] + "," + tntSpawner[2])) {
 			s.await(l -> l.contains("Done ("), 300);
 			s.await(l -> l.contains("[saves-scenario] done"), 60);
+			// Without the repair the server stops here ("Unexpected exception", a ClassCastException in the spawner's tick).
+			s.await(l -> l.contains("[saves-scenario] spawner at " + spawnerAt + " after 40 ticks"), 60);
 			s.saveAndStop();
 			lines = s.lines();
 		}
@@ -156,7 +173,10 @@ class ServerSaveTest {
 				+ " (unreadable: ClassCastException; left out); "), "the unreadable chest reported");
 		assertTrue(has(lines, "; put in their place: an empty chest at "), "the fresh block entities reported");
 		assertTrue(has(lines, "The chunk at blocks " + bare[0] * 16 + ", " + bare[1] * 16 + " had damaged parts (put in their place: an empty chest at "
-				+ bareChest[0] + ", " + bareChest[1] + ", " + bareChest[2] + ")"), "the bare chest reported");
+				+ bareChest[0] + ", " + bareChest[1] + ", " + bareChest[2] + "; a pig spawner in place of one of PrimedTnt (not a mob) at "
+				+ tntSpawner[0] + ", " + tntSpawner[1] + ", " + tntSpawner[2] + ")"), "the bare chest and the TNT spawner reported");
+		assertTrue(has(lines, "[saves-scenario] spawner at " + spawnerAt + " after 40 ticks: MobSpawnerBlockEntity of Pig"),
+				"the TNT spawner set back to pigs, ticking without a crash");
 		assertCopyExists(world, bare);
 		assertCopy(world, garbage, garbageRecord);
 		assertCopy(world, version, versionSectors);
@@ -468,8 +488,14 @@ class ServerSaveTest {
 
 		/** {@code scenario}: blocks for the scenario mod to use and break (x,y,z;...), or empty for none. */
 		Server(String scenario) throws IOException {
+			this(scenario, "");
+		}
+
+		/** {@code spawner}: x,y,z of a spawner the scenario mod makes tick as if a player stood beside it (#65). */
+		Server(String scenario, String spawner) throws IOException {
 			String java = ProcessHandle.current().info().command().orElse("java");
-			process = new ProcessBuilder(java, "-Xmx768m", "-Doldfaithful.saves.scenario=" + scenario, "-cp", System.getProperty("oldfaithful.server.classpath"),
+			process = new ProcessBuilder(java, "-Xmx768m", "-Doldfaithful.saves.scenario=" + scenario,
+					"-Doldfaithful.saves.scenario.spawner=" + spawner, "-cp", System.getProperty("oldfaithful.server.classpath"),
 					"net.fabricmc.loader.impl.launch.knot.KnotServer", "nogui").directory(run.toFile()).redirectErrorStream(true).start();
 			live.add(process);
 			process.onExit().thenRun(() -> live.remove(process));

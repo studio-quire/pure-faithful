@@ -44,4 +44,6 @@ include 'oldfaithful-saves'
 // The Fixed edition's own mods (Old Faithful). Not in Pure Faithful's public snapshot until Old Faithful is released
 // (tools/publish/rules.py), so they're included only where they exist.
 ['oldfaithful-fixes', 'oldfaithful-lighting', 'oldfaithful-options'].each { if (file(it).isDirectory()) include it }
+// Test-only bug hunts (hunt/): private (tools/publish/rules.py), so included only where it exists.
+if (file('hunt').isDirectory()) include 'hunt'
 include 'harness'

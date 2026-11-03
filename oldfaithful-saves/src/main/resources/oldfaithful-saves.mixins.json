@@ -6,9 +6,11 @@
   "mixins": [
     "AlphaChunkStorageMixin",
     "AlphaWorldStorageMixin",
+    "EntityRegistryAccessor",
     "ChunkCacheMixin",
     "NbtCompoundAccessor",
     "PersistentStateManagerMixin",
+    "PistonBlockMixin",
     "RegionChunkStorageMixin",
     "RegionFileMixin"
   ],

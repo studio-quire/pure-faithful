@@ -17,6 +17,7 @@ import net.minecraft.entity.ItemEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.ServerWorld;
 import net.minecraft.world.chunk.Chunk;
@@ -31,11 +32,21 @@ import net.minecraft.world.chunk.Chunk;
  */
 public final class Scenario {
 	private static boolean done;
+	/** #65: {@code -Doldfaithful.saves.scenario.spawner=x,y,z}, a spawner that ticks as if a player stood beside it. */
+	private static final int[] SPAWNER = parse(System.getProperty("oldfaithful.saves.scenario.spawner", ""));
+	private static int after = -1;
 
 	private Scenario() {
 	}
 
 	public static void tick(ServerWorld world) {
+		if (world.dimension.id == 0 && SPAWNER != null && after >= 0 && ++after == 40) {
+			// Forty ticks of a spawner whose delay was 0: it has tried to spawn; an id that isn't a mob would have thrown.
+			BlockEntity be = world.getBlockEntity(SPAWNER[0], SPAWNER[1], SPAWNER[2]);
+			NbtCompound nbt = new NbtCompound();
+			if (be != null) be.writeNbt(nbt);
+			say("spawner at " + SPAWNER[0] + " " + SPAWNER[1] + " " + SPAWNER[2] + " after 40 ticks: " + kind(be) + " of " + nbt.getString("EntityId"));
+		}
 		String spec = System.getProperty("oldfaithful.saves.scenario", "");
 		if (done || spec.isEmpty() || world.dimension.id != 0) return;
 		done = true;
@@ -65,6 +76,17 @@ public final class Scenario {
 		List<Integer> dropped = drops(world);
 		say("broke " + blocks.size() + " blocks; dropped " + dropped.subList(before, dropped.size()));
 		say("done");
+		after = 0;
+	}
+
+	public static boolean isTestSpawner(BlockEntity be) {
+		return SPAWNER != null && be.x == SPAWNER[0] && be.y == SPAWNER[1] && be.z == SPAWNER[2];
+	}
+
+	private static int[] parse(String s) {
+		if (s.isEmpty()) return null;
+		String[] p = s.split(",");
+		return new int[] {Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])};
 	}
 
 	/** Item ids of the item entities above y 100 (where the test's blocks are, and nothing else drops). */

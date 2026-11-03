@@ -24,6 +24,7 @@ import net.minecraft.block.entity.JukeboxBlockEntity;
 import net.minecraft.block.entity.MobSpawnerBlockEntity;
 import net.minecraft.block.entity.NoteBlockBlockEntity;
 import net.minecraft.block.entity.SignBlockEntity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.nbt.NbtByteArray;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
@@ -37,6 +38,7 @@ import net.minecraft.world.chunk.ChunkNibbleArray;
 import net.minecraft.world.chunk.storage.AlphaChunkStorage;
 import net.minecraft.world.chunk.storage.RegionFile;
 import net.minecraft.world.chunk.storage.RegionIo;
+import org.studioquire.oldfaithful.saves.mixin.EntityRegistryAccessor;
 
 /**
  * Loading a chunk from a region file without ever throwing away what's on disk (docs/bugs.md #1).
@@ -236,6 +238,7 @@ public final class ChunkLoad {
 		chunk.fill();
 		repairs.addAll(dropped);
 		restoreBlockEntities(chunk, repairs);
+		repairSpawners(chunk, repairs);
 		if (raw.status == RegionWrites.Raw.Status.OVERSIZED) {
 			Log.info("Chunk " + chunkX + ", " + chunkZ + " loaded from its oversized-chunk file " + raw.detail);
 		}
@@ -309,6 +312,33 @@ public final class ChunkLoad {
 		int shown = Math.min(made.size(), 5);
 		repairs.add("put in their place: " + String.join(", ", made.subList(0, shown))
 				+ (made.size() > shown ? " and " + (made.size() - shown) + " more" : ""));
+	}
+
+	/**
+	 * docs/bugs.md #65: a spawner's tick casts what its entity id makes to a mob, so a spawner set to something else
+	 * (primed TNT, an item, a minecart: world editors allow it) throws every tick a player is within 16 blocks, which
+	 * crashes single player and stops a server, every time the world is opened. Such a spawner is set back to the block's
+	 * default, a pig, and listed with the repairs. An id nothing is registered under is left alone: the game already
+	 * spawns nothing for it, and it may be another mod's mob that comes back with that mod.
+	 */
+	private static void repairSpawners(Chunk chunk, List<String> repairs) {
+		Map<String, Class<?>> classes = EntityRegistryAccessor.oldfaithful$idToClass();
+		List<String> reset = null;
+		for (Object o : chunk.blockEntities.values()) {
+			if (!(o instanceof MobSpawnerBlockEntity)) continue;
+			MobSpawnerBlockEntity spawner = (MobSpawnerBlockEntity) o;
+			NbtCompound nbt = new NbtCompound();
+			spawner.writeNbt(nbt);
+			String id = nbt.getString("EntityId");
+			Class<?> type = classes.get(id);
+			if (type == null || LivingEntity.class.isAssignableFrom(type)) continue;
+			spawner.setSpawnedEntityId("Pig");
+			String what = "a pig spawner in place of one of " + id + " (not a mob) at " + spawner.x + ", " + spawner.y + ", " + spawner.z;
+			Log.warn("Put " + what);
+			if (reset == null) reset = new ArrayList<>();
+			reset.add(what);
+		}
+		if (reset != null) repairs.add(String.join(", ", reset));
 	}
 
 	private static boolean isByteArray(NbtElement e, int length) {

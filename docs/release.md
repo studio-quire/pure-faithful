@@ -256,6 +256,7 @@ the green seal, source and issues on `studio-quire/old-faithful`. The token (the
   the game, Java 21 chosen, a first launch downloading the game and its sounds. The template is the dev instance's,
   which the user has imported, plus those four, each read from Prism 11.1.1's source, not tried. What's inside each
   pack starts and plays unseen (`clientStartupTestPack`, `-Fixed`).
-- The standalone component in a real Babric instance: replacing `patches/org.lwjgl.json`, the downloads from the
-  release's URLs (only possible once a release exists, or against a draft release), the display mod working there.
+- The standalone component in a real Babric instance: replacing `patches/org.lwjgl.json` and the display mod
+  working there. (Its download URLs resolve on the 0.1.2 release, each library's SHA-1 and size as the file says,
+  checked 2026-11-02.)
 - The server packages from the release zips on a machine other than this one.
