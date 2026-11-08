@@ -4,6 +4,16 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.4 (2026-11-08)
+
+Released with Old Faithful 0.2.2, which carries it.
+
+- Fixed a rare crash when a server makes a new world: about once in 900 new worlds, it stopped at "Preparing level".
+- Saves: the messages in chat about trouble in a world's files (a chunk that couldn't be read, or one too big for
+  beta's format) say what happened, where, and where the original is kept, without the file-format detail, which stays
+  in the log. In Old Faithful or Still Faithful they start with that edition's
+  name instead of Pure Faithful's.
+
 ## 0.1.3 (2026-11-02)
 
 Bug fixes.
