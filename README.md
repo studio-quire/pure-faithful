@@ -47,8 +47,8 @@ Everything else is inside the zip; nothing else is downloaded, from us or anyone
 
 Already playing b1.7.3 on Fabric (Babric) in Prism? Our mods work on their own.
 
-- **purefaithful-hardening**, **purefaithful-saves** (client and server) and **purefaithful-speed** (client): drop
-  the jars from the release into the instance's `.minecraft/mods`.
+- **purefaithful-hardening**, **purefaithful-saves** and **purefaithful-speed** (client and server): drop the jars
+  from the release into the instance's `.minecraft/mods`.
 - **purefaithful-display** (the window, high-resolution screens, fullscreen, paste) needs our LWJGL in place of
   LWJGL 2. One step: close Prism, then put **`org.lwjgl.json`** from the release into the instance's `patches` folder
   (in Prism: right-click the instance, **Folder**), replacing the file there if there is one. Prism downloads the
@@ -60,8 +60,8 @@ one (fullscreen-tweaks, whose fix we include).
 
 ## Servers
 
-`PureFaithful-server-<version>.zip` is beta 1.7.3's own server with the hardening and saves mods: bring Mojang's
-server jar (the scripts check it's genuine) and run `start.bat` or `start.sh`. Its README says more.
+`PureFaithful-server-<version>.zip` is beta 1.7.3's own server with the hardening, saves and speed mods: bring
+Mojang's server jar (the scripts check it's genuine) and run `start.bat` or `start.sh`. Its README says more.
 
 ## Problems
 

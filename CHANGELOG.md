@@ -4,6 +4,14 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.5 (2026-11-09)
+
+Released with Old Faithful 0.2.3, which carries it.
+
+- Servers make new land faster: in our tests, a server generating new chunks as fast as it could took about a third
+  less time. The land is the same. The speed mod (purefaithful-speed) now works on servers too, and the server package
+  includes it. Single player is unchanged.
+
 ## 0.1.4 (2026-11-08)
 
 Released with Old Faithful 0.2.2, which carries it.
