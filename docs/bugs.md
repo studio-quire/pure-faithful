@@ -4,7 +4,7 @@ Claude Opus 5.5, 2026-11-02. Second pass, then the first fixes. Purist leaves al
 says it may be the user's call to take into Purist. Old Faithful (Fixed) is narrow (user, 2026-11-02): beta as it was
 meant to work, its clear mistakes fixed, and anything players built around left as beta (at most a setting that
 defaults to beta). What later versions changed, the **ask** entries, belongs to the polished edition, Still Faithful,
-not to Fixed. Fixed so far: forty-nine entries in `oldfaithful-fixes` (`docs/fixes.md`), with fifty-two switches between them (#34 has four) in `config/oldfaithful-fixes.properties`; lighting (#3) in `oldfaithful-lighting` (`docs/lighting.md`).
+not to Fixed. Fixed so far: fifty-one entries in `oldfaithful-fixes` (`docs/fixes.md`), with fifty-four switches between them (#34 has four) in `config/oldfaithful-fixes.properties`; lighting (#3) in `oldfaithful-lighting` (`docs/lighting.md`).
 
 Sources:
 - The decompiled game (`local/decomp/b1.7.3-named`, Babric's names), read for causes.
@@ -120,6 +120,9 @@ Key:
 | 79 | Multiplayer: an item used just after closing a chest, furnace or workbench (a block placed within about a round trip) comes back on the player's screen, one more than they have, until the slot next changes | bug | OF | low-mid (MP) | fixed (OF) |
 | 80 | A dark hairline down the seam between two blocks side by side, seen with the camera almost in line with the seam (half a block off it, 4 away, looking down a little): chests and planks alike | ? | ? | low | seen in pictures, not looked into |
 | 81 | A mob that has died stays solid while it falls over: it pushes you and other mobs and is pushed, and arrows bounce off it though nothing can hurt it | bug | OF | low | fixed (OF) |
+| 82 | An arrow that starts a tick exactly on the face it's about to strike is put at NaN: beta divides by how far it moved, which is none | bug | ? | ? | seen in Explosive Arrows, not looked into for plain arrows |
+| 83 | Multiplayer: a rider's look goes to the server only while it holds still, so other players never see a riding player's head turn and the server's yaw for them drifts | bug | OF | low-mid (MP) | fixed (OF) |
+| 84 | Mobs at the edges of the screen vanish while part of them is still in view (a head, arms, a squid's tentacles, half a ghast): beta culls by the bare box where they are this tick, though most models reach past it and are drawn up to a tick behind | bug | OF | mid | fixed (OF) |
 
 #32 (video settings sliders can't be dragged) left the table: vanilla has no slider there (its entry).
 
@@ -401,7 +404,9 @@ still over chunks it hasn't received (ask: the server's flying check, `floatingT
 player).
 **Order fixed (OF)**, `multiplayer.chunkOrder` (server): what's waiting is sorted by distance whenever the view
 re-centres. After a /tp the first chunk sent is the one underfoot (beta's: the west edge). Holding still: Still
-Faithful's.
+Faithful's. Since 2026-11-10 the order goes by the chunk underfoot from the position rounded down; it went by beta's
+view square's centre, the position cut toward zero, a chunk off when the player stood in the eastmost block of a chunk
+west of 0 (or the southmost north of 0), where the chunk underfoot came second (`fixesMultiplayerTest` failed so once).
 
 ### 17. Advanced OpenGL flicker (L)
 With Advanced OpenGL on, chunks blink out at the edges of view when turning: occlusion query results lag the camera.
@@ -689,8 +694,19 @@ spawn area alone leaves tens of thousands of liquid ticks at its edge, which ret
 everything else). Ticks still run only with their surroundings loaded, so they never load chunks. Checked on the real
 server (`:oldfaithful-fixes:serverTicksTest`): a repeater clock built and running, the server stopped and started, the
 clock runs on; the same world on a vanilla server loads cleanly and its clock stands still. Noticed on the way: a new
-world's generation leaves some 240,000 liquid ticks, worked through at 1,000 a tick (about four minutes); vanilla
+world's generation leaves some 240,000 liquid ticks, worked through at 1,000 a tick (about 250 ticks, 13 s, as
+`serverTicksTest`'s wait showed 2026-11-09; this said four minutes before); vanilla
 dropped what was left on quitting, now it's saved and finished next time.
+A save or an unload takes each chunk's ticks from the queue grouped by chunk (2026-11-09, Claude Fable 5.2): one pass
+over the queue, kept until the queue changes, which the world's set of pending ticks reports by counting its changes
+(`PendingTicks.Counted`, wrapped round whatever set the world has). Up to 0.2.3 the whole queue was read for every chunk
+saved or unloaded, so a save cost chunks times ticks queued: about 17 ms a chunk on a queue of 940,000, which 2,304
+chunks made with nobody near leave. Measured on the real server on that land (`serverTicksTest -Pticks.square=48
+-Pfixes.seed=1733`, other sessions' tests and the user's game running): the save of 2,881 chunks 43.5 s with 0.2.3's
+jar, 4.1 s now; 48 chunks unloaded 1.2 s, now 0.04 s. What's written and what comes back is the same, tick for tick:
+`everyTickSavedAndRestored` (`docs/fixes.md` > Tests) passes on 0.2.3's jar and on this one. One grouping costs about
+three whole-queue reads (13 ms at 240,000 ticks), so a save of one or two chunks on a long queue is a little slower
+than it was, and everything larger faster.
 
 ### 43. A missing block entity crashes the game when its block is broken (T, Pure)
 Fixed (2026-11-02, after 0.1.0) in `oldfaithful-saves`: every loaded chunk's vanilla blocks with a block entity that
@@ -1108,6 +1124,61 @@ little could rely on it (a crowd at a trap shoved for a second, arrows soaked up
 pushable, pushing nothing, an arrow through it); with the fix off, both as beta (Still Faithful's all-off run, when it
 was polish, 2026-11-08: pushable, pushed, the arrow bounced back).
 
+### 82. An arrow starting a tick on the face it strikes goes to NaN (seen, not looked into for plain arrows)
+Found by Explosive Arrows' self-test (2026-11-09): an arrow whose tick starts exactly on the face it
+strikes has moved nothing that tick, and beta's `ArrowEntity.tick` divides by that distance as it backs the arrow off
+the face, so its position becomes NaN. An explosive arrow's burst there disconnected a client on a server; that mod now
+bursts where the tick began and a client ignores a burst it can't draw. Plain arrows still do it: what a NaN arrow does
+afterwards (on a client, on a server, in a save) isn't looked into. ? (low, by how
+exact the start must be).
+
+### 83. A rider's look goes to the server only while it holds still (T)
+Found 2026-11-10 by Claude Opus 5.5, building Still Faithful's Boat Steering. `MultiplayerClientPlayerEntity.method_1922`
+(lines 86-91): while riding, each tick's move packet carries the rider's motion, marked with -999 for both heights, and
+is meant to carry the look when it changed, as on foot the same function does; the test is the wrong way round: when
+the look changed since the last tick it sends the motion alone (`PlayerMovePositionAndOnGroundPacket`), and only when it
+didn't, the full packet with yaw and pitch. So a rider turning their view, or turned by the boat or cart they
+ride (`Entity.tickRiding` turns the view with the vehicle), tells the server nothing of where they look until they hold
+still: other players see their head stay put, and the server's own yaw for them drifts, since it turns a rider with
+the vehicle twice a packet (`ServerPlayNetworkHandler.onPlayerMove`: `tickVehicle` at line 131 ticks the vehicle and
+then its rider, and `updateEntity(player)` at 142 the rider again, with the vehicle's last turn counted both times).
+bug, OF. **Fixed in Old Faithful** (2026-11-10, `multiplayer.ridingLook`, client): while riding, the motion-only packet
+becomes beta's own full one, every tick, which any server reads as beta's sends it when the look holds still.
+The server's double turn is left as beta: with the look in every packet the server takes the client's yaw from each
+before the vehicle ticks, and between packets the turn only puts the look it shows others up to one tick's turn of the
+vehicle ahead. The cost is 8 bytes more a riding tick at most (the full packet is 42 bytes, the motion one 34), which
+beta already sent whenever the view held still. Still Faithful's Boat Steering reads a rider's keys through this look on
+a server (`docs/still-faithful.md`).
+
+### 84. Mobs at the edges of the screen vanish while part of them is still in view (T, measured)
+The user's sense while playing (2026-11-11): mobs at the edge of the view sometimes seemed to be culled.
+`WorldRenderer.renderEntities` draws an entity only while `culler.isVisible(entity.boundingBox)`: its bare box, where it
+is this tick. But it's drawn where it's interpolated to between ticks (`EntityRenderDispatcher.render`), up to a tick's
+move behind, and most models reach past their boxes. Measured in the real game, unseen, by `:harness:cullingMeasure`
+(Claude Opus 5.5, 2026-11-11; `docs/fixes.md` > Tests): every common kind slid out of view past each edge, in each of
+its poses and facing every way, drawn regardless of culling with its pixels counted from the depth buffer. Beta dropped
+something still on screen in 3,161 of 4,760 slides (1440x900), and the game's own frames dropped every one of them. How
+far each is drawn past its box, as the box's distance outside the edge's plane at the furthest point any of it shows:
+- cow 0.80 mid-stride (0.45 standing), sheep 0.78 (0.44), a player with a sword 0.75 (a 16-letter name tag the same),
+  creeper 0.65 swelling mid-stride (0.32), zombie pigman 0.61 (its sword), chicken 0.57, wolf 0.55, arrow 0.53, zombie
+  0.50, big slime 0.49, spider 0.47, skeleton 0.47, pig 0.45, dropped apple 0.41, minecart 0.31, small slime 0.24, boat
+  0.22;
+- squid 1.34 (its tentacles; 1.33 lying as out of water), ghast 2.94 (its body stands 2.3 above its box and swells wider
+  as it charges);
+- fallen over dying, where the roll lays the body's height out sideways: zombie 1.72, cow 1.31, spider 0.82, ghast 4.85.
+
+As beta drops one, up to 13,700 pixels of a cow are on screen (1% of it), 29,300 of a squid, 64,000 of a ghast and
+146,000 of a dying ghast (11%). Later versions grow the box they cull by half a block (`inflate(0.5)`, as remembered,
+not checked here), which by these numbers still drops cows, sheep, players, creepers, pigmen, chickens, wolves, squid and
+ghasts. Our own mods don't change entity culling: the speed mod skips only a frustum beta computes and drops, the FOV
+slider changes the projection the frustum is read from, and Still Faithful's Entity Distance changes only the distance
+test. OF, mid (a head or tentacles blinking out at the edge as you turn; a squid or ghast loses much of itself).
+**Fixed in Old Faithful** (2026-11-11, `render.entityCulling`): the box tested is where the entity is drawn in that
+frame, grown on every side by a block, a squid's by 1.5 and a ghast's by 3, a dying mob's by its height besides, and a
+sleeping player's to 2 (its box shrinks to a fifth of a block under a body 1.8 long; reasoned from the code, not
+measured). Measured again with it: every kind drawn at the furthest point any of it shows, in all 3,301 slides that beta
+drops (with the dying poses). Checked in `FixesCheck` both ways (`docs/fixes.md`).
+
 ### 74. A step-up under a low roof sinks into the floor (T, seen)
 Asked about by the user (2026-11-06), who remembered being moved slightly into a block and pushed out on a simple
 one-block ledge, single player on Still Faithful; whether theirs had a block overhead isn't known yet. Later versions'
@@ -1214,7 +1285,9 @@ At the surface (fixed, near it meaning the middle within a block of the surface;
 Never wholly out of the water. A squid at the top bobs: 11 to 16% of its ticks near the surface are in the out-of-water branch, each
 a tick or up to 3 long, so in that branch's gravity it drops back a little and swims up again, with a one-tick change of tentacles.
 That's the same hop beta's squid did at the floor all the time (about 200 changes of branch a minute, and 194 a minute for a fixed
-squid kept at the top by a 1-deep pool); how it looks is the user's check. Elsewhere, the same as beta: water 1 deep (mean height 0.19 both, the
+squid kept at the top by a 1-deep pool); the user, playing, found it a jitter (2026-11-10): Still Faithful's Squid
+Surfacing eases a squid off 0.3 under the surface instead, and Old Faithful keeps the bounce, beta's own squid code at
+the surface (`docs/still-faithful.md` > Squid at the surface). Elsewhere, the same as beta: water 1 deep (mean height 0.19 both, the
 second half); a trough of flowing water thinning out, all 6 squid carried off its end onto dry stone within the first minute and left
 there, in both; on land they stay where they are, unhurt.
 On a client (`fixesMultiplayerTest`, a tank 3 deep, about 20 s): with the fixes on both sides its squid are exactly at the server's height (0.000), reach 2.50 over the floor, and make no

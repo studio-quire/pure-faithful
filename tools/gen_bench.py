@@ -12,7 +12,7 @@ the server thread over just the generation, by method, ours and beta's (Biny nam
 it wants a few seconds of work. Results in local/run/gen-bench/LABEL/result.txt. `towers` is Buried Towers alone; `all`
 every library mod in the packs. --plans is how to show two builds draw the same towers: `--size 2 --plans -12,-12,24`
 (and again with `--style complex`), then compare its plans.txt with library/tower-check/reference/plans-1733-simple.txt
-(or -complex), 576 squares as Buried Towers 0.2.0 drew them.
+(or -complex), 576 squares as Buried Towers 0.2.0 drew them, with the vault's zombies of 2026-11-09.
 Claude Opus 5.5, 2026-11-08.
 """
 import argparse
@@ -31,7 +31,7 @@ import jfr_profile  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 JAVA = ROOT / "local" / "tools" / "jdk21" / "bin" / "java.exe"
-PACKAGE = ROOT / "local" / "server-package" / "OldFaithful-server"
+PACKAGE = ROOT / "build" / "server-package" / "OldFaithful-server"
 SERVER_JAR = ROOT / "local" / "cache" / "minecraft" / "b1.7.3-server.jar"
 PACK_MODS = ["world-rules", "water-bottles", "hearty-food", "alchemy", "blue-flowers", "item-repair", "buried-towers"]
 
@@ -140,6 +140,8 @@ def main():
     ap.add_argument("--top", type=int, default=25)
     args = ap.parse_args()
 
+    if not PACKAGE.is_dir():
+        sys.exit(f"no server package in {PACKAGE}: run `./gw serverPackage` in this checkout first")
     run = ROOT / "local" / "run" / "gen-bench" / args.label
     if run.exists():
         shutil.rmtree(run)

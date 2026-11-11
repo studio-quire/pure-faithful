@@ -4,6 +4,22 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.6 (2026-11-11)
+
+Released with Old Faithful 0.2.6, which carries it.
+
+- The bow, doors opening and closing, and explosions sound as they did in beta. Launchers today give later recordings
+  of these four (for explosions, version 1.2's set of four in place of beta's single one), so until now every edition
+  played those. Beta's explosion is still among Mojang's own files, and comes from there. Beta's bow and doors, which
+  Mojang no longer offers, are fetched from the archive of beta's files kept by Modification Station, a community of
+  beta modders, over HTTPS and checked against their known contents, and kept in
+  `.minecraft/cache/purefaithful-hardening/`. So an instance fetches them once, on its first start; if they don't
+  come then, it tries again at each start until they do. Until then the later recordings play, as before. With
+  `resources.download=false` in `.minecraft/config/purefaithful-hardening.properties`, no sounds are fetched, from
+  Mojang or the archive; the game writes that file on its first start, so in a new instance set it before you
+  launch, creating the file if it isn't there. A settings file kept from an earlier version doesn't mention the
+  fetch, but the setting works the same.
+
 ## 0.1.5 (2026-11-09)
 
 Released with Old Faithful 0.2.3, which carries it.
