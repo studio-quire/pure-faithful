@@ -4,6 +4,18 @@ Every release has one version number, shared by the mods, the LWJGL component, t
 (docs/release.md > Versions). Newest first. Entries say what a player or server owner notices; the commits have the
 rest.
 
+## 0.1.7 (2026-11-15)
+
+Released with Old Faithful 0.2.10, which carries it.
+
+- Opening or closing a screen (the inventory, chat, the pause menu) no longer stands still for up to a tenth of a
+  second when it comes during the game's background save of its statistics: it goes on as soon as that save is done.
+- Big explosions and floods of particles cost less: clearing out particles that have died no longer shifts all the
+  others along, and neither does adding one once its kind is at beta's limit of 4,000 (each new one drops the oldest
+  of its kind). The same particles, drawn in the same order.
+- Unplugging or switching off your only display during play no longer brings a crash screen: the game's frame timing
+  keeps the refresh rate it last had.
+
 ## 0.1.6 (2026-11-11)
 
 Released with Old Faithful 0.2.6, which carries it.
